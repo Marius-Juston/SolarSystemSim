@@ -138,8 +138,8 @@ def plot_overview(sys: StarSystem, save_path: Optional[str] = None):
             arrowprops=dict(arrowstyle="-", color=col, lw=0.5,
                             alpha=0.5))
 
-    ax.set_xlim(-ext + centre[0], ext + centre[0])
-    ax.set_ylim(-ext + centre[1], ext + centre[1])
+    # ax.set_xlim(-ext + centre[0], ext + centre[0])
+    # ax.set_ylim(-ext + centre[1], ext + centre[1])
     ax.set_aspect("equal", "box")
     ax.set_xlabel("x  [AU]", color="white")
     ax.set_ylabel("y  [AU]", color="white")
