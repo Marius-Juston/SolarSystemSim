@@ -175,4 +175,97 @@ pdrift = [b["rel_drift"] for b in rep["bodies"] if b["kind"] == "planet"]
 print(f"  nested NB: {rep['n_bodies']} bodies, "
       f"max planet drift {max(pdrift) * 100:.2f}%  (expect < 25%)")
 assert max(pdrift) < 0.25, max(pdrift)
+
+# --- Skyview v2: oblateness, Lambert phase, lit background ---------------
+from goldilocks.skyview import (oblateness_for, _lambert_phase,
+                                background_starfield, sky_bodies,
+                                lambda_grid_nm)
+from goldilocks.moons import Moon
+
+# Oblateness: Earth-analog nearly spherical; a fast rotator clearly oblate.
+e_earth = Planet("E", mass_me=1.0, radius_re=1.0,
+                 semi_major_axis_au=1.0, host_star_index=0)
+e_earth.habitability = profile_for_planet(
+    e_earth, se, np.random.default_rng(0), in_phz=True)
+f_earth = oblateness_for(e_earth)
+fast = Planet("Fast", mass_me=1.0, radius_re=1.0,
+              semi_major_axis_au=1.0, host_star_index=0)
+fast.habitability = profile_for_planet(fast, se, np.random.default_rng(0))
+fast.habitability.sidereal_day_h = 4.0          # rapid spin
+f_fast = oblateness_for(fast)
+print(f"  oblateness Earth-analog={f_earth:.4f}  fast(4h)={f_fast:.3f}")
+assert 0.0 <= f_earth < 0.01, f_earth
+assert f_earth < f_fast < 0.35, (f_earth, f_fast)
+
+# Lambert phase: Phi(0)=1, Phi(pi)=0, monotone decreasing.
+xs = np.linspace(0.0, math.pi, 50)
+phi = _lambert_phase(xs)
+print(f"  Lambert phase: Phi(0)={phi[0]:.3f} Phi(pi)={phi[-1]:.3f}")
+assert abs(phi[0] - 1.0) < 1e-6 and phi[-1] < 1e-6
+assert np.all(np.diff(phi) <= 1e-9), "Lambert phase not monotone"
+
+# Background starfield deterministic for a seed.
+d1, t1, fx1, pn1 = background_starfield(2026)
+d2, t2, fx2, pn2 = background_starfield(2026)
+assert np.array_equal(d1, d2) and np.array_equal(fx1, fx2)
+print(f"  background_starfield deterministic: {d1.shape[0]} stars")
+
+# Reflected flux ~ linear in A_g and (R/d)^2: a moon with 2x radius and
+# 2x albedo-density is ~ (2)*(4) brighter.
+sun2 = Star("Sun", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K, radius=1.0)
+pm = Planet("Host", mass_me=1.0, radius_re=1.0, semi_major_axis_au=1.0,
+            host_star_index=0)
+pm.moons = [Moon("m1", mass_me=0.01, radius_re=0.25, a_planet_au=0.0026,
+                 density_gcc=3.0, kind="regular"),
+            Moon("m2", mass_me=0.08, radius_re=0.50, a_planet_au=0.0060,
+                 density_gcc=1.5, kind="regular")]
+sm = StarSystem.single("S", sun2, planets=[pm])
+pm.habitability = profile_for_planet(pm, sm, np.random.default_rng(0),
+                                     in_phz=True)
+lam = lambda_grid_nm()
+bs = {b.name: float(np.sum(b.refl_spec))
+      for b in sky_bodies(sm, pm, lam, 0.0, 0.0)}
+print(f"  reflected-flux ratio m2/m1 = {bs['m2'] / max(bs['m1'],1e-30):.2f}")
+assert bs["m2"] > bs["m1"] > 0.0, bs
+
+# Multi-colour background stars: the field must span cool (red) to hot
+# (blue), and a 3000 K vs 20000 K black body must be red- vs blue-biased.
+from goldilocks.skyview import (planck_spectral, spectrum_to_srgb,
+                                lambda_grid_nm, atmosphere_for)
+_, bt, _, _ = background_starfield(2026)
+print(f"  background Teff range: {bt.min():.0f}-{bt.max():.0f} K")
+assert bt.min() < 3200.0 and bt.max() > 12000.0, (bt.min(), bt.max())
+_lam = lambda_grid_nm()
+from goldilocks.skyview import cie_xyz_bar as _cxb
+_, _yb, _ = _cxb(_lam)
+_dl = float(_lam[1] - _lam[0])
+def _rgb(T):
+    pl = planck_spectral(_lam, T); pl = pl / np.trapezoid(pl, _lam * 1e-9)
+    Y = float(np.dot(pl, _yb) * _dl)         # mid-tone, unsaturated
+    return spectrum_to_srgb(pl[None, :], _lam, 0.35 / max(Y, 1e-12))[0]
+cool, hot = _rgb(3000.0), _rgb(20000.0)
+print(f"  3000K rgb={tuple(int(c) for c in cool)}  "
+      f"20000K rgb={tuple(int(c) for c in hot)}")
+assert int(cool[0]) > int(cool[2]) and int(hot[2]) >= int(hot[0]), \
+    (cool, hot)
+
+# Distinct atmospheres: a thin N2/O2 vs a dense CO2 atmosphere must give
+# different Rayleigh scattering (different sky colour).
+class _P:                                 # minimal duck-typed planet
+    radius_re = 1.0
+    def __init__(self, prof): self.habitability = prof
+pa = profile_for_planet(
+    Planet("a", mass_me=1.0, radius_re=1.0, semi_major_axis_au=1.0,
+           host_star_index=0), se, np.random.default_rng(0), in_phz=True)
+pb = profile_for_planet(
+    Planet("b", mass_me=1.0, radius_re=1.0, semi_major_axis_au=1.0,
+           host_star_index=0), se, np.random.default_rng(0), in_phz=True)
+pb.dominant_gas = "CO2"; pb.surface_pressure_bar = 30.0
+pb.mean_molecular_weight = 44.0
+at_a = atmosphere_for(_P(pa), _lam)
+at_b = atmosphere_for(_P(pb), _lam)
+print(f"  beta_r(N2/O2 1bar)~{at_a.beta_r.mean():.2e}  "
+      f"beta_r(CO2 30bar)~{at_b.beta_r.mean():.2e}")
+assert at_b.beta_r.mean() > 3.0 * at_a.beta_r.mean(), \
+    (at_a.beta_r.mean(), at_b.beta_r.mean())
 print("  All section-9 assertions passed.")
