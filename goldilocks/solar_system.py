@@ -74,8 +74,10 @@ def _effective_star(name: str, m1: float, m2: float) -> Star:
 
 
 def _build_stars(rng: np.random.Generator,
-                 name: str) -> Tuple[StarSystem, str]:
-    n = _draw_n_stars(rng)
+                 name: str,
+                 n_stars: int | None = None) -> Tuple[StarSystem, str]:
+    n = _draw_n_stars(rng) if n_stars is None else n_stars
+
     if n == 1:
         s = Star("Star A", mass=_random_mass(rng, 0.30, 1.50))
         return StarSystem.single(name, s), "single star"
@@ -265,13 +267,14 @@ def _letter(i: int) -> str:
 # ---------------------------------------------------------------------
 def random_solar_system(rng: Optional[np.random.Generator] = None,
                         name: Optional[str] = None,
-                        max_tries: int = 50) -> StarSystem:
+                        max_tries: int = 50,
+                        n_stars: int | None = None) -> StarSystem:
     """Generate a random solar system with >= 1 planet in the PHZ."""
     if rng is None:
         rng = np.random.default_rng()
     for attempt in range(max_tries):
         nm = name or f"Random system {rng.integers(1000, 9999)}"
-        sys, note = _build_stars(rng, nm)
+        sys, note = _build_stars(rng, nm, n_stars=n_stars)
         band = _pick_phz_band(sys)
         if band is None:
             continue

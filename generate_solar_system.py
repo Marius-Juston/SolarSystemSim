@@ -35,10 +35,15 @@ os.makedirs(OUT_ANI, exist_ok=True)
 
 def main():
     seed = int(_sys.argv[1]) if len(_sys.argv) > 1 else 2026
+    
+    for n_stars in range(1, 4):
+        gen_system(seed * n_stars, n_stars)
+
+def gen_system(seed, n):
     rng = np.random.default_rng(seed)
     t0 = time.time()
 
-    print(f"=== Generating random solar system (seed={seed}) ===")
+    print(f"=== Generating random solar system (seed={seed}) with {n} stars ===")
     system = random_solar_system(rng, name=f"Aurelia-{seed}")
     print(system.summary(use_phz=True))
     print("\n" + system.generation_note + "\n")
@@ -49,8 +54,8 @@ def main():
 
     # ----- static figures -----
     print("Rendering overview + per-planet zoom cards...")
-    plot_overview(system, os.path.join(OUT_FIG, f"{seed}_overview.png"))
-    plot_all_planet_zooms(system, os.path.join(OUT_FIG, f"{seed}_planets.png"))
+    plot_overview(system, os.path.join(OUT_FIG, f"{seed}_{n}_overview.png"))
+    plot_all_planet_zooms(system, os.path.join(OUT_FIG, f"{seed}_{n}_planets.png"))
 
     # ----- long-term nested N-body verification -----
     print("Running nested N-body stability verification...")
@@ -61,24 +66,24 @@ def main():
         rng=np.random.default_rng(seed + 1))
     rep = result["report"]
     print(f"  verdict: {'STABLE' if rep['stable'] else 'UNSTABLE'}  "
-          f"({rep['n_bodies']} bodies, horizon {rep['horizon_yr']:.0f} yr, "
-          f"{rep['sub_steps']} sub-steps/sample) [{time.time() - t1:.1f}s]")
+        f"({rep['n_bodies']} bodies, horizon {rep['horizon_yr']:.0f} yr, "
+        f"{rep['sub_steps']} sub-steps/sample) [{time.time() - t1:.1f}s]")
     for b in rep["bodies"]:
         if b["kind"] == "planet" or not b["stable"]:
             flag = "" if b["stable"] else "  <-- FLAGGED"
             print(f"    {b['label']:<16s} {b['kind']:<7s} "
-                  f"a~{b['a_au']:.3g} AU  e~{b['e']:.3f}  "
-                  f"drift {b['rel_drift']*100:.2f}%{flag}")
+                f"a~{b['a_au']:.3g} AU  e~{b['e']:.3f}  "
+                f"drift {b['rel_drift']*100:.2f}%{flag}")
 
     plot_longterm_stability(result, system,
-                            os.path.join(OUT_FIG, f"{seed}_stability.png"))
+                            os.path.join(OUT_FIG, f"{seed}_{n}_stability.png"))
 
     # ----- animations -----
     print("Rendering MP4 animations (requires ffmpeg)...")
     try:
         animate_solar_system(
             result, system,
-            os.path.join(OUT_ANI, f"{seed}_system.mp4"))
+            os.path.join(OUT_ANI, f"{seed}_{n}_system.mp4"))
         print("  system MP4 done")
     except Exception as e:                       # ffmpeg missing etc.
         print(f"  animation skipped: {e}")
