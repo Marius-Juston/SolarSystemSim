@@ -9,4 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-goldilocks/
+# Generated demo outputs
+/figures/
+/animations/

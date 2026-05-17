@@ -29,11 +29,11 @@ import math
 import warnings
 import numpy as np
 
-from stellar  import Star, T_EFF_SUN_K
-from system   import StarSystem
-from planets  import (Planet, earth_analog, super_earth, mini_earth,
+from goldilocks.stellar  import Star, T_EFF_SUN_K
+from goldilocks.system   import StarSystem
+from goldilocks.planets  import (Planet, earth_analog, super_earth, mini_earth,
                        mars_analog, venus_analog)
-import stability as stab
+from goldilocks import stability as stab
 
 
 # ---------------------------------------------------------------------

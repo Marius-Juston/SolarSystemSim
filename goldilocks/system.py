@@ -36,14 +36,14 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from stellar           import Star
-import habitable_zone  as hz
-import stability       as stab
-import secular         as sec
-import roche
-from   planets         import (Planet, earth_analog,
+from goldilocks.stellar           import Star
+from goldilocks import habitable_zone as hz
+from goldilocks import stability as stab
+from goldilocks import secular as sec
+from goldilocks import roche
+from   goldilocks.planets        import (Planet, earth_analog,
                                M_EARTH_OVER_M_SUN)
-from   kepler          import (kepler_two_body, orbital_period,
+from   goldilocks.kepler         import (kepler_two_body, orbital_period,
                                G_AU3_MSUN_YR2)
 
 

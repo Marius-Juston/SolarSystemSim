@@ -48,7 +48,7 @@ from typing import Iterable, List, Tuple, Optional
 
 import numpy as np
 
-from stellar import Star
+from goldilocks.stellar import Star
 
 
 # -----------------------------------------------------------------------

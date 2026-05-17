@@ -3,19 +3,19 @@ import math
 import warnings
 import numpy as np
 
-from stellar           import Star, T_EFF_SUN_K
-from habitable_zone    import single_star_hz, seff_for_limit, hz_distance
-from stability         import (holman_wiegert_stype, holman_wiegert_ptype,
+from goldilocks.stellar           import Star, T_EFF_SUN_K
+from goldilocks.habitable_zone    import single_star_hz, seff_for_limit, hz_distance
+from goldilocks.stability         import (holman_wiegert_stype, holman_wiegert_ptype,
                                mardling_aarseth_stable,
                                max_planets_in_zone)
-from roche             import eggleton_roche_radius, roche_lobe_periastron
-from secular           import (heppenheimer_e_forced_stype,
+from goldilocks.roche             import eggleton_roche_radius, roche_lobe_periastron
+from goldilocks.secular           import (heppenheimer_e_forced_stype,
                                leung_lee_e_forced_ptype,
                                laplace_coefficient,
                                secular_max_eccentricities)
-from kepler            import kepler_two_body, orbital_period
-from system            import StarSystem
-from planets           import (earth_analog, kepler16_b, kepler34_b,
+from goldilocks.kepler            import kepler_two_body, orbital_period
+from goldilocks.system            import StarSystem
+from goldilocks.planets           import (earth_analog, kepler16_b, kepler34_b,
                                kepler35_b, kepler38_b,
                                kepler47_b, kepler47_d, kepler47_c)
 

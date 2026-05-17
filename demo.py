@@ -24,19 +24,20 @@ import os, math, time
 import matplotlib
 matplotlib.use("Agg")
 
-from stellar       import Star, T_EFF_SUN_K
-from planets       import (earth_analog, kepler16_b, kepler47_b,
+from goldilocks.stellar       import Star, T_EFF_SUN_K
+from goldilocks.planets       import (earth_analog, kepler16_b, kepler47_b,
                             kepler47_c, kepler47_d)
-from system        import StarSystem
-from visualization import plot_system
-from animation     import animate_system
-from random_systems import (star_hopper_binary, trojan_system,
+from goldilocks.system        import StarSystem
+from goldilocks.visualization import plot_system
+from goldilocks.animation     import animate_system
+from goldilocks.random_systems import (star_hopper_binary, trojan_system,
                               wide_hierarchical_triple,
                               polar_planet_system)
 
 
-OUT_FIG = "/home/claude/goldilocks/figures"
-OUT_ANI = "/home/claude/goldilocks/animations"
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+OUT_FIG = os.path.join(_ROOT, "figures")
+OUT_ANI = os.path.join(_ROOT, "animations")
 os.makedirs(OUT_FIG, exist_ok=True)
 os.makedirs(OUT_ANI, exist_ok=True)
 

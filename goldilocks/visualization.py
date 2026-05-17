@@ -25,11 +25,11 @@ from typing import Optional, Tuple, List
 import numpy as np
 import matplotlib.pyplot as plt
 
-from system          import StarSystem
-import habitable_zone as hz
-import secular       as sec
-from kepler          import orbital_period
-from nbody           import (StarTrajectory, planet_initial_state,
+from goldilocks.system          import StarSystem
+from goldilocks import habitable_zone as hz
+from goldilocks import secular as sec
+from goldilocks.kepler          import orbital_period
+from goldilocks.nbody           import (StarTrajectory, planet_initial_state,
                               integrate_planets)
 
 

@@ -41,7 +41,7 @@ from typing import List, Sequence, Tuple, Callable, Optional
 
 import numpy as np
 
-from kepler import (G_AU3_MSUN_YR2, kepler_two_body, orbital_period,
+from goldilocks.kepler import (G_AU3_MSUN_YR2, kepler_two_body, orbital_period,
                     solve_kepler)
 
 
