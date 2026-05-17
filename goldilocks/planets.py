@@ -32,13 +32,14 @@ Orosz J.A. et al., 2012, ApJ 758, 87        (Kepler-38 b)
 from __future__ import annotations
 import math
 from dataclasses import dataclass, field
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 
 
 # Conversion factors -----------------------------------------------------
 M_EARTH_OVER_M_SUN  = 3.0034893e-6
 M_JUP_OVER_M_EARTH  = 317.83
 R_EARTH_KM          = 6378.137
+EARTH_BULK_DENSITY_GCC = 5.514          # g/cm^3 (mean Earth density)
 
 
 # -----------------------------------------------------------------------
@@ -55,6 +56,27 @@ def radius_from_mass_me(mass_me: float) -> float:
     return 17.74 * mass_me ** -0.044
 
 
+def bulk_density_gcc(mass_me: float, radius_re: float) -> float:
+    """Mean bulk density (g/cm^3) from Earth-relative mass and radius.
+
+    rho = rho_Earth * (M/Me) / (R/Re)^3.  Used for the planetary
+    (density-based) Roche limit of moons.
+    """
+    return EARTH_BULK_DENSITY_GCC * mass_me / (radius_re ** 3)
+
+
+# Giant if heavier than ~0.1 M_Jup or puffier than ~4 R_earth.  Below this
+# the Otegi/Chen-Kipping relation is in the rocky/sub-Neptune regime.
+GAS_GIANT_MASS_ME   = 30.0
+GAS_GIANT_RADIUS_RE = 4.0
+
+
+def is_gas_giant(planet: "Planet") -> bool:
+    """Classify a planet as a gas/ice giant (vs terrestrial)."""
+    return (planet.mass_me >= GAS_GIANT_MASS_ME
+            or (planet.radius_re or 0.0) >= GAS_GIANT_RADIUS_RE)
+
+
 # -----------------------------------------------------------------------
 # Planet data class
 # -----------------------------------------------------------------------
@@ -69,6 +91,11 @@ class Planet:
     host_star_index: Optional[int] = None  # None -> circumbinary (P-type)
     description: str = ""
     real_planet: bool = False
+    # Populated by the random-solar-system generator (moons.py / habitability.py).
+    moons: List[Any] = field(default_factory=list)
+    habitability: Optional[Any] = None
+    # 0.0 = prograde rotation; spin obliquity etc. live in `habitability`.
+    inclination_deg: float = 0.0
 
     def __post_init__(self) -> None:
         if self.radius_re is None:

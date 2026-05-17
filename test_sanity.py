@@ -116,3 +116,63 @@ print(f"  Alpha Cen triple stable?  {ok}  (expect True)")
 ok = mardling_aarseth_stable(23.4, 50.0, 0.50,
                               1.10, 0.907, 0.122)
 print(f"  Same triple at a_out=50: {ok}  (expect False)")
+
+
+print()
+print("=" * 72)
+print("9.  Random-solar-system additions (moons / habitability / nested NB)")
+print("=" * 72)
+from goldilocks.moons import (planetary_roche_limit_au,
+                              critical_moon_fraction, AU_KM)
+from goldilocks.solar_system import STAR_COUNT_PMF, random_solar_system
+from goldilocks.habitability import profile_for_planet
+from goldilocks.planets import Planet
+from goldilocks.nbody_moons import integrate_solar_system
+
+# Earth-Moon fluid Roche limit ~ 18,400 km (textbook).
+d_au = planetary_roche_limit_au(1.0, 5.514, 3.344)
+d_km = d_au * AU_KM
+print(f"  Earth-Moon fluid Roche limit: {d_km:,.0f} km  (expect ~18,400)")
+assert 16000.0 < d_km < 21000.0, d_km
+
+# Domingos+2006 prograde critical fraction at zero eccentricity.
+f0 = critical_moon_fraction(0.0, 0.0, retrograde=False)
+print(f"  Domingos prograde a_crit/R_Hill (e=0): {f0:.4f}  (expect 0.4895)")
+assert abs(f0 - 0.4895) < 1e-6, f0
+
+# Raghavan PMF normalisation.
+tot = sum(STAR_COUNT_PMF.values())
+print(f"  Raghavan star-count PMF sum: {tot:.2f}  (expect 1.00)")
+assert abs(tot - 1.0) < 1e-9, tot
+
+# Habitability: Sun + Earth-analog -> g=1, T_eq ~ 255 K.
+ssun = Star("Sun", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K, radius=1.0)
+se = StarSystem.single("Sun+E", ssun,
+                       planets=[Planet("Earth", mass_me=1.0, radius_re=1.0,
+                                       semi_major_axis_au=1.0,
+                                       eccentricity=0.0167,
+                                       host_star_index=0)])
+prof = profile_for_planet(se.planets[0], se, np.random.default_rng(0),
+                          in_phz=True)
+print(f"  Earth-analog gravity = {prof.surface_gravity_g:.3f} g  (expect 1.0)")
+print(f"  Earth-analog T_eq    = {prof.t_eq_k:.0f} K  (expect ~245-260)")
+assert abs(prof.surface_gravity_g - 1.0) < 1e-6, prof.surface_gravity_g
+assert 235.0 < prof.t_eq_k < 270.0, prof.t_eq_k
+
+# Generator guarantees >= 1 PHZ planet.
+gsys = random_solar_system(np.random.default_rng(11), name="Sanity")
+n_phz = sum(1 for p in gsys.planets
+            if p.habitability and p.habitability.in_phz)
+print(f"  random_solar_system PHZ planets: {n_phz}  (expect >= 1)")
+assert n_phz >= 1, n_phz
+
+# Nested N-body: a generated system stays bounded over a short horizon.
+r = integrate_solar_system(gsys, duration_yr=12.0, n_samples=120,
+                           max_integrated_moons_per_planet=4,
+                           rng=np.random.default_rng(3))
+rep = r["report"]
+pdrift = [b["rel_drift"] for b in rep["bodies"] if b["kind"] == "planet"]
+print(f"  nested NB: {rep['n_bodies']} bodies, "
+      f"max planet drift {max(pdrift) * 100:.2f}%  (expect < 25%)")
+assert max(pdrift) < 0.25, max(pdrift)
+print("  All section-9 assertions passed.")
