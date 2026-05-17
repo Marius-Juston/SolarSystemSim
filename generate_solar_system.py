@@ -44,7 +44,7 @@ def gen_system(seed, n):
     t0 = time.time()
 
     print(f"=== Generating random solar system (seed={seed}) with {n} stars ===")
-    system = random_solar_system(rng, name=f"Aurelia-{seed}")
+    system = random_solar_system(rng, name=f"Aurelia-{seed}", n_stars=n)
     print(system.summary(use_phz=True))
     print("\n" + system.generation_note + "\n")
     for p in system.planets:
