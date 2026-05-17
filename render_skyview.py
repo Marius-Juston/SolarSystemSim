@@ -27,13 +27,14 @@ import sys as _sys
 import time
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
 from goldilocks.stellar import Star, T_EFF_SUN_K
 from goldilocks.system import StarSystem
-from goldilocks.planets import earth_analog, is_gas_giant, Planet
+from goldilocks.planets import earth_analog, Planet
 from goldilocks.moons import Moon
 from goldilocks.habitability import profile_for_planet, HabitabilityProfile
 from goldilocks.solar_system import random_solar_system
@@ -100,22 +101,22 @@ def _build(seed: int):
 # deterministically the intended regime -- a robust stress test, not a
 # random draw that may collapse to one atmosphere.
 _REGIMES = {
-    "n2o2":  dict(dominant_gas="N2/O2 (temperate)", mean_molecular_weight=29.0,
-                  surface_pressure_bar=1.0, scale_height_km=8.5,
-                  sky_color_hex="#7FB2FF", bond_albedo=0.30,
-                  sky_description="clear Rayleigh-scattered blue sky",
-                  t_eq_k=255.0, t_surface_k=288.0),
+    "n2o2": dict(dominant_gas="N2/O2 (temperate)", mean_molecular_weight=29.0,
+                 surface_pressure_bar=1.0, scale_height_km=8.5,
+                 sky_color_hex="#7FB2FF", bond_albedo=0.30,
+                 sky_description="clear Rayleigh-scattered blue sky",
+                 t_eq_k=255.0, t_surface_k=288.0),
     "dense": dict(dominant_gas="N2/O2 (temperate)", mean_molecular_weight=29.0,
                   surface_pressure_bar=2.4, scale_height_km=7.0,
                   sky_color_hex="#3A6BE0", bond_albedo=0.25,
                   sky_description="deep Rayleigh blue (high-pressure)",
                   t_eq_k=270.0, t_surface_k=320.0),
-    "co2":   dict(dominant_gas="CO2 (runaway-greenhouse)",
-                  mean_molecular_weight=44.0, surface_pressure_bar=12.0,
-                  scale_height_km=15.0, sky_color_hex="#E8C16A",
-                  bond_albedo=0.65, storm_index=0.5,
-                  sky_description="dense CO2 overcast, hazy "
-                  "yellow-orange sky", t_eq_k=360.0, t_surface_k=560.0),
+    "co2": dict(dominant_gas="CO2 (runaway-greenhouse)",
+                mean_molecular_weight=44.0, surface_pressure_bar=12.0,
+                scale_height_km=15.0, sky_color_hex="#E8C16A",
+                bond_albedo=0.65, storm_index=0.5,
+                sky_description="dense CO2 overcast, hazy "
+                                "yellow-orange sky", t_eq_k=360.0, t_surface_k=560.0),
     "titan": dict(dominant_gas="N2/CH4 (cold, reducing)",
                   mean_molecular_weight=28.0, surface_pressure_bar=1.5,
                   scale_height_km=20.0, sky_color_hex="#C8772E",
@@ -127,19 +128,19 @@ _REGIMES = {
                     scale_height_km=11.0, sky_color_hex="#1A1326",
                     bond_albedo=0.12,
                     sky_description="near-vacuum: black sky, sharp "
-                    "shadows", t_eq_k=255.0, t_surface_k=255.0),
+                                    "shadows", t_eq_k=255.0, t_surface_k=255.0),
     "subnep": dict(dominant_gas="H2/He-rich (sub-Neptune)",
                    mean_molecular_weight=4.0, surface_pressure_bar=200.0,
                    scale_height_km=30.0, sky_color_hex="#A9C6D8",
                    bond_albedo=0.40,
                    sky_description="thick hydrogen haze, washed-out "
-                   "white sky", t_eq_k=200.0, t_surface_k=400.0),
+                                   "white sky", t_eq_k=200.0, t_surface_k=400.0),
     "giant": dict(dominant_gas="H2/He (+CH4, NH3)",
                   mean_molecular_weight=2.3, surface_pressure_bar=1.0e4,
                   scale_height_km=27.0, sky_color_hex="#D9C7A3",
                   bond_albedo=0.34, storm_index=0.8,
                   sky_description="deep banded H2/He haze, "
-                  "ammonia/methane tinted", t_eq_k=120.0,
+                                  "ammonia/methane tinted", t_eq_k=120.0,
                   t_surface_k=165.0),
 }
 
@@ -150,7 +151,7 @@ def _curated_world(name, regime, mass_me, radius_re, a_au, *,
     """Single-star world with an explicit, deterministic atmosphere
     regime profile (so the gallery reliably spans every sky colour)."""
     s = star or Star("G2V Sun", mass=1.0, luminosity=1.0,
-                      teff=T_EFF_SUN_K, radius=1.0)
+                     teff=T_EFF_SUN_K, radius=1.0)
     p = Planet(name=name, mass_me=mass_me, radius_re=radius_re,
                semi_major_axis_au=a_au, eccentricity=0.0,
                host_star_index=0)
@@ -250,7 +251,7 @@ def sky_colour_gallery(out_path: str):
                   snight, pnight, dict(latitude_deg=0.0), "midnight"))
 
     cols = 3
-    rows = int(np.ceil((len(tiles) + 1) / cols))   # +1 = star strip
+    rows = int(np.ceil((len(tiles) + 1) / cols))  # +1 = star strip
     fig, axes = plt.subplots(rows, cols,
                              figsize=(6.0 * cols, 3.6 * rows))
     fig.patch.set_facecolor("#0b0c10")
@@ -320,9 +321,9 @@ def debug_sky_bodies(sysX, planet, base, *, latitude_deg=15.0,
     _, exp, _, _, _ = render_sky(sysX, planet, rot_phase=ph["noon"],
                                  latitude_deg=latitude_deg, resolution=res)
     rots = np.linspace(0.0, 2.0 * np.pi, n_scan, endpoint=False) \
-        + ph["midnight"]
+           + ph["midnight"]
 
-    frames = []          # (rgb, [(name,kind,x,y,r,alt,phase), ...])
+    frames = []  # (rgb, [(name,kind,x,y,r,alt,phase), ...])
     for rp in rots:
         rgb, _, _, _, bodies = render_sky(
             sysX, planet, rot_phase=float(rp), latitude_deg=latitude_deg,
@@ -423,7 +424,7 @@ def main():
         try:
             animate_day(sysX, planet, mp4, n_frames=120)
             print(f"  day MP4   -> {os.path.relpath(mp4, _ROOT)}")
-        except Exception as e:                       # ffmpeg missing etc.
+        except Exception as e:  # ffmpeg missing etc.
             print(f"  day MP4 skipped: {e}")
         print(f"  [{time.time() - t0:.1f}s]\n")
 

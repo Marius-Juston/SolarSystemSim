@@ -36,15 +36,16 @@ horizon and body count explicitly.
 """
 
 from __future__ import annotations
+
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import numpy as np
 
 from goldilocks.kepler import G_AU3_MSUN_YR2, orbital_period
 from goldilocks.nbody import StarTrajectory, planet_initial_state
-from goldilocks.planets import M_EARTH_OVER_M_SUN, is_gas_giant
+from goldilocks.planets import M_EARTH_OVER_M_SUN
 
 
 # ---------------------------------------------------------------------
@@ -52,13 +53,13 @@ from goldilocks.planets import M_EARTH_OVER_M_SUN, is_gas_giant
 # ---------------------------------------------------------------------
 @dataclass
 class _Bodies:
-    pos0: np.ndarray            # (Nb, 3) AU
-    vel0: np.ndarray            # (Nb, 3) AU/yr
-    mass_msun: np.ndarray       # (Nb,)
-    kind: List[str]             # "planet" | "moon"
-    center: List[int]           # planet idx of moon's host, else -1
+    pos0: np.ndarray  # (Nb, 3) AU
+    vel0: np.ndarray  # (Nb, 3) AU/yr
+    mass_msun: np.ndarray  # (Nb,)
+    kind: List[str]  # "planet" | "moon"
+    center: List[int]  # planet idx of moon's host, else -1
     label: List[str]
-    planet_rows: List[int]      # row index of each planet (order = sys.planets)
+    planet_rows: List[int]  # row index of each planet (order = sys.planets)
 
 
 def _build_bodies(sys, rng: np.random.Generator,
@@ -92,24 +93,30 @@ def _build_bodies(sys, rng: np.random.Generator,
             mean_anomaly_rad=float(rng.uniform(0, 2 * math.pi)))
         p_row = len(pos)
         planet_rows.append(p_row)
-        pos.append(r); vel.append(v)
+        pos.append(r);
+        vel.append(v)
         mass.append(p.mass_me * M_EARTH_OVER_M_SUN)
-        kind.append("planet"); center.append(-1); label.append(p.name)
+        kind.append("planet");
+        center.append(-1);
+        label.append(p.name)
 
         # ----- moons of this planet -----
         chosen = _select_moons(p.moons, max_moons_per_planet)
         m_planet_msun = p.mass_me * M_EARTH_OVER_M_SUN
         for mn in chosen:
-            inc = math.radians(mn.inclination_deg)   # >90deg => retrograde
+            inc = math.radians(mn.inclination_deg)  # >90deg => retrograde
             rm, vm = planet_initial_state(
                 host_pos=r, host_vel=v, m_host_msun=m_planet_msun,
                 a_au=mn.a_planet_au, e=mn.eccentricity, omega=0.0,
                 inclination_rad=inc,
                 lon_ascending_node_rad=float(rng.uniform(0, 2 * math.pi)),
                 mean_anomaly_rad=float(rng.uniform(0, 2 * math.pi)))
-            pos.append(rm); vel.append(vm)
+            pos.append(rm);
+            vel.append(vm)
             mass.append(mn.mass_me * M_EARTH_OVER_M_SUN)
-            kind.append("moon"); center.append(p_row); label.append(mn.name)
+            kind.append("moon");
+            center.append(p_row);
+            label.append(mn.name)
 
     if not pos:
         return _Bodies(np.zeros((0, 3)), np.zeros((0, 3)), np.zeros(0),
@@ -147,7 +154,7 @@ def _accels(body_pos: np.ndarray, body_mass: np.ndarray,
         acc += G_AU3_MSUN_YR2 * star_mass[k] * dr * inv[:, None]
     # Body-body, fully vectorised O(n^2).  d[i,j] = r_j - r_i.
     if n > 1:
-        d = body_pos[None, :, :] - body_pos[:, None, :]      # (i,j,3)
+        d = body_pos[None, :, :] - body_pos[:, None, :]  # (i,j,3)
         r2 = np.einsum("ijk,ijk->ij", d, d)
         np.fill_diagonal(r2, np.inf)
         inv = r2 ** -1.5
@@ -229,7 +236,7 @@ def integrate_solar_system(sys,
 
 
 def _analytic_star_vel(traj: StarTrajectory, star_masses: np.ndarray,
-                        times: np.ndarray) -> np.ndarray:
+                       times: np.ndarray) -> np.ndarray:
     """Analytic-orbit star velocities via a fine central difference of the
     closed-form trajectory (independent of the sample cadence)."""
     P_min = np.inf
@@ -278,10 +285,10 @@ def _center_state(sys, B: _Bodies, body_hist: np.ndarray,
 
 
 def _stability_report(sys, B: _Bodies, body_hist: np.ndarray,
-                       vel_hist: np.ndarray, star_hist: np.ndarray,
-                       star_masses: np.ndarray,
-                       traj: StarTrajectory, times: np.ndarray,
-                       horizon_yr: float, n_sub: int) -> dict:
+                      vel_hist: np.ndarray, star_hist: np.ndarray,
+                      star_masses: np.ndarray,
+                      traj: StarTrajectory, times: np.ndarray,
+                      horizon_yr: float, n_sub: int) -> dict:
     """Verdict from period-independent osculating elements.
 
     a_osc from vis-viva (1/a = 2/r - v^2/mu) is invariant over an orbit,

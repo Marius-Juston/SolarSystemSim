@@ -42,9 +42,9 @@ Smith A.W. & Lissauer J.J., 2009, Icarus 201, 381
 """
 
 from __future__ import annotations
+
 import math
 from typing import List
-
 
 M_EARTH_OVER_M_SUN = 3.0034893e-6
 

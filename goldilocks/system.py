@@ -29,6 +29,7 @@ barycentre, which is accurate as long as Mardling-Aarseth is satisfied
 """
 
 from __future__ import annotations
+
 import math
 import warnings
 from dataclasses import dataclass, field
@@ -36,15 +37,13 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from goldilocks.stellar           import Star
 from goldilocks import habitable_zone as hz
-from goldilocks import stability as stab
-from goldilocks import secular as sec
 from goldilocks import roche
-from   goldilocks.planets        import (Planet, earth_analog,
-                               M_EARTH_OVER_M_SUN)
-from   goldilocks.kepler         import (kepler_two_body, orbital_period,
-                               G_AU3_MSUN_YR2)
+from goldilocks import secular as sec
+from goldilocks import stability as stab
+from goldilocks.kepler import (kepler_two_body, orbital_period)
+from goldilocks.planets import (Planet)
+from goldilocks.stellar import Star
 
 
 # -----------------------------------------------------------------------
@@ -59,7 +58,7 @@ class StarSystem:
     # 'orbits the centre of mass of all preceding stars' (used for the
     # outer companion of a hierarchical triple).
     stellar_orbits: List[Tuple[int, int, float, float, float]] = \
-                                                field(default_factory=list)
+        field(default_factory=list)
     planets: List[Planet] = field(default_factory=list)
     # Verbose stability warnings.
     quiet: bool = False
@@ -102,7 +101,7 @@ class StarSystem:
         if separation_au * (1.0 - eccentricity) > 50.0 * bigger_hz and not quiet:
             warnings.warn(
                 f"Binary {name!r}: closest approach "
-                f"{separation_au*(1-eccentricity):.2f} AU is >> 50x the "
+                f"{separation_au * (1 - eccentricity):.2f} AU is >> 50x the "
                 f"HZ extent {bigger_hz:.2f} AU.  Stars are effectively "
                 "independent for HZ analysis.")
         return sys
@@ -121,7 +120,7 @@ class StarSystem:
         inner-pair barycentre."""
         sys = cls(name=name, stars=[inner_a, inner_b, outer],
                   stellar_orbits=[
-                      (0, 1, a_in,  e_in,  0.0),
+                      (0, 1, a_in, e_in, 0.0),
                       (2, -1, a_out, e_out, math.pi / 2),
                   ],
                   planets=planets or [], quiet=quiet)
@@ -129,13 +128,13 @@ class StarSystem:
 
         # Mardling-Aarseth stability check.
         if not stab.mardling_aarseth_stable(a_in, a_out, e_out,
-                                             inner_a.mass, inner_b.mass,
-                                             outer.mass, i_mut_deg):
+                                            inner_a.mass, inner_b.mass,
+                                            outer.mass, i_mut_deg):
             crit = stab.mardling_aarseth_ratio(a_in, e_out,
                                                inner_a.mass, inner_b.mass,
                                                outer.mass, i_mut_deg)
             msg = (f"Triple {name!r} fails Mardling-Aarseth stability:"
-                   f"  a_out/a_in = {a_out/a_in:.2f} < critical "
+                   f"  a_out/a_in = {a_out / a_in:.2f} < critical "
                    f"{crit:.2f}.")
             if not quiet:
                 warnings.warn(msg)
@@ -227,8 +226,8 @@ class StarSystem:
     # Permanently Habitable Zone (Eggl et al. 2012)
     # ------------------------------------------------------------------
     def _flux_thresholds(self, optimistic: bool) -> Tuple[float, float]:
-        inner_lim = "RecentVenus"       if optimistic else "RunawayGreenhouse"
-        outer_lim = "EarlyMars"         if optimistic else "MaxGreenhouse"
+        inner_lim = "RecentVenus" if optimistic else "RunawayGreenhouse"
+        outer_lim = "EarlyMars" if optimistic else "MaxGreenhouse"
         return (float(hz._SEFF_SUN[hz.LIMIT_INDEX[inner_lim]]),
                 float(hz._SEFF_SUN[hz.LIMIT_INDEX[outer_lim]]))
 
@@ -236,7 +235,7 @@ class StarSystem:
             self, host_index: int,
             optimistic: bool,
             n_phase: int = 24,
-            ) -> Tuple[float, float]:
+    ) -> Tuple[float, float]:
         """Find the conservative (inner, outer) HZ around stars[host_index]
         as a function of time: a planet on a circular orbit is permanently
         habitable iff it stays inside the snapshot HZ for EVERY phase of
@@ -257,8 +256,8 @@ class StarSystem:
         edge_idx = 0
         P = self.stellar_orbit_period(edge_idx)
         s_in_thr, s_out_thr = self._flux_thresholds(optimistic)
-        inner_lim = "RecentVenus"       if optimistic else "RunawayGreenhouse"
-        outer_lim = "EarlyMars"         if optimistic else "MaxGreenhouse"
+        inner_lim = "RecentVenus" if optimistic else "RunawayGreenhouse"
+        outer_lim = "EarlyMars" if optimistic else "MaxGreenhouse"
 
         # The maximum total flux a circular S-type planet receives is
         # bounded above when the secondary is at periastron of the
@@ -272,12 +271,12 @@ class StarSystem:
         # Iterate over binary phases (the secondary's phase) and over
         # planet phase (theta in [0, 2 pi)).
         n_phase_planet = 48
-        thetas = np.linspace(0, 2*math.pi, n_phase_planet, endpoint=False)
-        times  = np.linspace(0.0, P, n_phase, endpoint=False)
+        thetas = np.linspace(0, 2 * math.pi, n_phase_planet, endpoint=False)
+        times = np.linspace(0.0, P, n_phase, endpoint=False)
 
         # Search the inner edge upward and the outer edge downward from
         # the single-star solution.
-        candidate_in  = host_indep_inner
+        candidate_in = host_indep_inner
         candidate_out = host_indep_outer
 
         # Scan radii in log space; mark "habitable at all phases" radii.
@@ -307,17 +306,17 @@ class StarSystem:
                 planet_pos = host_positions + r * np.array(
                     [math.cos(theta), math.sin(theta), 0.0])  # broadcasts (T,3)
                 # Compute weighted flux from all stars for each time t.
-                flux_in  = np.zeros(positions_per_time.shape[0])
+                flux_in = np.zeros(positions_per_time.shape[0])
                 flux_out = np.zeros_like(flux_in)
                 for si in range(len(self.stars)):
                     star_pos = positions_per_time[:, si, :]
                     diff = planet_pos - star_pos
                     r2 = np.einsum("ij,ij->i", diff, diff)
                     r2 = np.where(r2 > 1e-12, r2, np.nan)
-                    flux_in  += s_in_w[si]  * self.stars[si].luminosity / r2
+                    flux_in += s_in_w[si] * self.stars[si].luminosity / r2
                     flux_out += s_out_w[si] * self.stars[si].luminosity / r2
-                if (np.any(flux_in  > s_in_thr) or
-                    np.any(flux_out < s_out_thr)):
+                if (np.any(flux_in > s_in_thr) or
+                        np.any(flux_out < s_out_thr)):
                     ok = False
                     break
             habitable_radius[ri] = ok
@@ -330,17 +329,17 @@ class StarSystem:
         return float(radii[biggest[0]]), float(radii[biggest[-1]])
 
     def _ptype_phz_for_circular_planet(self,
-            optimistic: bool,
-            n_phase: int = 24,
-            ) -> Tuple[float, float]:
+                                       optimistic: bool,
+                                       n_phase: int = 24,
+                                       ) -> Tuple[float, float]:
         """Same as above but for circumbinary (P-type) orbits."""
         if len(self.stars) == 1:
             return None
         edge_idx = 0
         P = self.stellar_orbit_period(edge_idx)
         s_in_thr, s_out_thr = self._flux_thresholds(optimistic)
-        inner_lim = "RecentVenus"       if optimistic else "RunawayGreenhouse"
-        outer_lim = "EarlyMars"         if optimistic else "MaxGreenhouse"
+        inner_lim = "RecentVenus" if optimistic else "RunawayGreenhouse"
+        outer_lim = "EarlyMars" if optimistic else "MaxGreenhouse"
 
         # Equivalent single-star scan radii based on total luminosity.
         L_tot = self.total_luminosity()
@@ -348,8 +347,8 @@ class StarSystem:
         r_inner_guess = math.sqrt(L_tot / hz._SEFF_SUN[hz.LIMIT_INDEX[inner_lim]])
 
         n_phase_planet = 48
-        thetas = np.linspace(0, 2*math.pi, n_phase_planet, endpoint=False)
-        times  = np.linspace(0.0, P, n_phase, endpoint=False)
+        thetas = np.linspace(0, 2 * math.pi, n_phase_planet, endpoint=False)
+        times = np.linspace(0.0, P, n_phase, endpoint=False)
         s_in_w = np.array([hz.spectral_weight(s.teff, inner_lim)
                            for s in self.stars])
         s_out_w = np.array([hz.spectral_weight(s.teff, outer_lim)
@@ -375,17 +374,17 @@ class StarSystem:
             for theta in thetas:
                 planet_pos = bary + r * np.array(
                     [math.cos(theta), math.sin(theta), 0.0])
-                flux_in  = np.zeros(positions_per_time.shape[0])
+                flux_in = np.zeros(positions_per_time.shape[0])
                 flux_out = np.zeros_like(flux_in)
                 for si in range(len(self.stars)):
                     star_pos = positions_per_time[:, si, :]
                     diff = planet_pos - star_pos
                     r2 = np.einsum("ij,ij->i", diff, diff)
                     r2 = np.where(r2 > 1e-12, r2, np.nan)
-                    flux_in  += s_in_w[si]  * self.stars[si].luminosity / r2
+                    flux_in += s_in_w[si] * self.stars[si].luminosity / r2
                     flux_out += s_out_w[si] * self.stars[si].luminosity / r2
-                if (np.any(flux_in  > s_in_thr) or
-                    np.any(flux_out < s_out_thr)):
+                if (np.any(flux_in > s_in_thr) or
+                        np.any(flux_out < s_out_thr)):
                     ok = False
                     break
             habitable[ri] = ok
@@ -545,7 +544,7 @@ class StarSystem:
         """
         in_au, out_au = stable_band
         positions = stab.packing_positions(in_au, out_au, m_star_msun,
-                                            planet_mass_me, delta)
+                                           planet_mass_me, delta)
         if not positions:
             return {"stable_HZ": stable_band, "n_planets": 0,
                     "positions": [], "e_max": []}
@@ -565,7 +564,7 @@ class StarSystem:
                         break
                 if a_b is None:
                     a_b = float(np.linalg.norm(np.array(other.position) -
-                                                 np.array(host.position)))
+                                               np.array(host.position)))
                 for pi, a_p in enumerate(positions):
                     ext[pi] += sec.heppenheimer_e_forced_stype(a_p, a_b, e_b)
         elif ptype == "P":
@@ -577,7 +576,7 @@ class StarSystem:
                 if a_p > a_b:
                     ext[pi] = sec.leung_lee_e_forced_ptype(a_p, a_b, e_b, mu)
                 else:
-                    ext[pi] = 1.0   # forbidden, will be trimmed below
+                    ext[pi] = 1.0  # forbidden, will be trimmed below
 
         # Laplace-Lagrange coupling among the packed planets
         masses = [planet_mass_me] * len(positions)
@@ -596,7 +595,7 @@ class StarSystem:
             for i_p, a_p in enumerate(positions):
                 e_i = e_max[i_p]
                 peri = a_p * (1.0 - e_i)
-                apo  = a_p * (1.0 + e_i)
+                apo = a_p * (1.0 + e_i)
                 if peri < keep_in_au or apo > keep_out_au:
                     ok = False
                     drop = i_p
@@ -637,7 +636,7 @@ class StarSystem:
                                 "note": "No SMA known"})
                 continue
             peri = p.semi_major_axis_au * (1.0 - p.eccentricity)
-            apo  = p.semi_major_axis_au * (1.0 + p.eccentricity)
+            apo = p.semi_major_axis_au * (1.0 + p.eccentricity)
             if p.is_circumbinary():
                 if len(self.stars) < 2:
                     results.append({"planet": p.name, "in_PHZ": False,
@@ -696,9 +695,9 @@ class StarSystem:
                                  f"e={e:.3f}, P={P:.3g} yr")
 
         res = self.count_habitable_planets(planet_mass_me, delta,
-                                            optimistic, use_phz)
+                                           optimistic, use_phz)
         zone_kind = "optimistic" if optimistic else "conservative"
-        phz_kind  = "PHZ" if use_phz else "classical HZ"
+        phz_kind = "PHZ" if use_phz else "classical HZ"
         lines.append(f"  Goldilocks {phz_kind} ({zone_kind}):")
         for entry in res["stars"]:
             if entry["stable_HZ"] is None:

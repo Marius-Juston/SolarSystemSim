@@ -42,32 +42,31 @@ from typing import List, Optional, Tuple, Dict
 
 import numpy as np
 
-from goldilocks.stellar import AU_M, R_SUN_M, G_SI
-from goldilocks.kepler import orbital_elements_to_state, orbital_period
-from goldilocks.planets import is_gas_giant, M_EARTH_OVER_M_SUN
 from goldilocks.habitability import R_EARTH_M, M_EARTH_KG
-
+from goldilocks.kepler import orbital_elements_to_state, orbital_period
+from goldilocks.planets import M_EARTH_OVER_M_SUN
+from goldilocks.stellar import AU_M, R_SUN_M, G_SI
 
 # ---------------------------------------------------------------------
 # Spectral grid + physical constants
 # ---------------------------------------------------------------------
 N_LAMBDA_DEFAULT = 20
-H_PLANCK = 6.62607015e-34          # J s
-C_LIGHT  = 2.99792458e8            # m / s
-K_BOLTZ  = 1.380649e-23            # J / K
+H_PLANCK = 6.62607015e-34  # J s
+C_LIGHT = 2.99792458e8  # m / s
+K_BOLTZ = 1.380649e-23  # J / K
 
 # Earth sea-level Rayleigh scattering at (440, 550, 680) nm  [m^-1]
 # (O'Neil / scratchapixel reference values).
 _BETA_R_EARTH = {440.0: 33.1e-6, 550.0: 13.5e-6, 680.0: 5.8e-6}
-_BETA_M_EARTH = 21e-6             # m^-1, weakly wavelength dependent
-_MIE_EXT_FACT = 1.1              # Mie extinction = 1.1 * scattering
+_BETA_M_EARTH = 21e-6  # m^-1, weakly wavelength dependent
+_MIE_EXT_FACT = 1.1  # Mie extinction = 1.1 * scattering
 
 # Lit-night background levels (relative to the unit-power stellar
 # spectra used everywhere here).  Ratios follow the moonless night-sky
 # budget airglow >> zodiacal >> integrated starlight (Roach & Gordon
 # 1973; Haenel et al. 2018): a deep starlit blue-grey, never pure black.
-_BG_STAR_GAIN   = 2.1e-5
-_AIRGLOW_LEVEL  = 3.3e-6
+_BG_STAR_GAIN = 2.1e-5
+_AIRGLOW_LEVEL = 3.3e-6
 _ZODIACAL_LEVEL = 1.5e-6
 _MILKYWAY_LEVEL = 3.6e-6
 
@@ -112,9 +111,9 @@ def cie_xyz_bar(lam_nm: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]
 
 # sRGB (linear) <- CIE XYZ
 _XYZ_TO_RGB = np.array([
-    [ 3.2406, -1.5372, -0.4986],
-    [-0.9689,  1.8758,  0.0415],
-    [ 0.0557, -0.2040,  1.0570],
+    [3.2406, -1.5372, -0.4986],
+    [-0.9689, 1.8758, 0.0415],
+    [0.0557, -0.2040, 1.0570],
 ])
 
 
@@ -164,14 +163,14 @@ def _comp_factor(dominant_gas: str) -> float:
 
 @dataclass
 class Atmosphere:
-    beta_r: np.ndarray          # Rayleigh scatter coeff per wavelength [1/m]
-    beta_m: float               # Mie scatter coeff [1/m]
-    mie_g: float                # Henyey-Greenstein asymmetry
+    beta_r: np.ndarray  # Rayleigh scatter coeff per wavelength [1/m]
+    beta_m: float  # Mie scatter coeff [1/m]
+    mie_g: float  # Henyey-Greenstein asymmetry
     h_rayleigh_m: float
     h_mie_m: float
     r_planet_m: float
     r_atmo_m: float
-    ground_albedo: np.ndarray   # per-wavelength Lambert reflectance
+    ground_albedo: np.ndarray  # per-wavelength Lambert reflectance
 
 
 def atmosphere_for(planet, lam_nm: np.ndarray) -> Atmosphere:
@@ -266,9 +265,9 @@ def _ellipsoid_quadratic(O: np.ndarray, d: np.ndarray, r_eq: float,
 class StarSky:
     name: str
     teff: float
-    flux_rel: float             # L / d^2 in Earth units
+    flux_rel: float  # L / d^2 in Earth units
     ang_radius_rad: float
-    dir_inertial: np.ndarray    # unit vector planet -> star (orbital frame)
+    dir_inertial: np.ndarray  # unit vector planet -> star (orbital frame)
 
 
 def _planet_position(sys, planet, orbit_phase: float) -> np.ndarray:
@@ -367,15 +366,15 @@ def _planet_pos_msun(sys, planet, mean_anom: float):
 @dataclass
 class SkyBody:
     name: str
-    kind: str                   # 'planet' | 'moon'
-    dir_inertial: np.ndarray    # unit, observer -> body (system frame)
+    kind: str  # 'planet' | 'moon'
+    dir_inertial: np.ndarray  # unit, observer -> body (system frame)
     dist_au: float
     ang_radius_rad: float
-    refl_spec: np.ndarray       # spectral irradiance at observer (Nlam)
-    phase_frac: float           # illuminated fraction 0..1
-    sub_star_dir: np.ndarray    # unit, body -> brightest star (sys frame)
+    refl_spec: np.ndarray  # spectral irradiance at observer (Nlam)
+    phase_frac: float  # illuminated fraction 0..1
+    sub_star_dir: np.ndarray  # unit, body -> brightest star (sys frame)
     f_oblate: float
-    spin_axis: np.ndarray       # unit (system frame), ~orbital normal
+    spin_axis: np.ndarray  # unit (system frame), ~orbital normal
     # Filled by render_sky for bodies it actually composited (debug
     # overlay): pixel centre, on-screen radius (px), altitude (deg).
     screen_x: float = -1.0
@@ -387,7 +386,7 @@ class SkyBody:
 def _albedo_g(body, is_moon: bool) -> float:
     if is_moon:
         rho = float(getattr(body, "density_gcc", 2.5))
-        return 0.40 if rho < 2.3 else 0.13      # icy bright vs rocky dark
+        return 0.40 if rho < 2.3 else 0.13  # icy bright vs rocky dark
     prof = getattr(body, "habitability", None)
     a = float(getattr(prof, "bond_albedo", 0.30)) if prof else 0.30
     return float(np.clip(a, 0.05, 0.75))
@@ -427,7 +426,7 @@ def sky_bodies(sys, observer_planet, lam_nm: np.ndarray,
             alpha = math.acos(np.clip(cos_a, -1.0, 1.0))
             phi = float(_lambert_phase(np.array(alpha)))
             refl = (star_L[i] / d_sb ** 2) * A_g \
-                * (r_body_au / d_obs) ** 2 * phi
+                   * (r_body_au / d_obs) ** 2 * phi
             spec += refl * star_spec[i]
             if star_L[i] / d_sb ** 2 > bright_f:
                 bright_f = star_L[i] / d_sb ** 2
@@ -460,9 +459,9 @@ def sky_bodies(sys, observer_planet, lam_nm: np.ndarray,
         if not is_obs:
             r_au = float(p.radius_re) * R_EARTH_AU
             _emit(p, p_pos, r_au, False,
-                   _hex_spectral_tint(
-                       p.habitability.sky_color_hex
-                       if p.habitability else "#9AA7B5", lam_nm))
+                  _hex_spectral_tint(
+                      p.habitability.sky_color_hex
+                      if p.habitability else "#9AA7B5", lam_nm))
         m_planet = float(p.mass_me) * M_EARTH_OVER_M_SUN
         for mn in getattr(p, "moons", []):
             # Skip the faint captured-irregular swarm: invisible specks
@@ -473,7 +472,7 @@ def sky_bodies(sys, observer_planet, lam_nm: np.ndarray,
             P_m = orbital_period(m_planet, m_moon, mn.a_planet_au)
             sgn = -1.0 if getattr(mn, "retrograde", False) else 1.0
             M_m = _phase0(mn.name) + sgn * 2.0 * math.pi * t_orbit \
-                / max(P_m, 1e-12)
+                  / max(P_m, 1e-12)
             off, _ = orbital_elements_to_state(m_planet, m_moon,
                                                mn.a_planet_au,
                                                mn.eccentricity,
@@ -510,7 +509,8 @@ def background_starfield(seed: int = 2026, n_stars: int = 6000):
     # Galactic plane: a fixed tilted great circle.
     pn = np.array([0.30, -0.20, 0.93])
     pn = pn / np.linalg.norm(pn)
-    e1 = np.cross(pn, [0.0, 0.0, 1.0]); e1 /= np.linalg.norm(e1)
+    e1 = np.cross(pn, [0.0, 0.0, 1.0]);
+    e1 /= np.linalg.norm(e1)
     e2 = np.cross(pn, e1)
     # Isotropic field.
     u = rng.normal(size=(n_iso, 3))
@@ -532,10 +532,9 @@ def background_starfield(seed: int = 2026, n_stars: int = 6000):
     return dirs, teff, flux, pn
 
 
-
 def _local_basis(obliquity_deg: float, latitude_deg: float,
-                  rot_phase: float) -> Tuple[np.ndarray, np.ndarray,
-                                              np.ndarray]:
+                 rot_phase: float) -> Tuple[np.ndarray, np.ndarray,
+np.ndarray]:
     """Return (east, north, zenith) unit vectors of an observer at the
     given latitude and planet rotation phase, in the orbital frame.
 
@@ -544,7 +543,7 @@ def _local_basis(obliquity_deg: float, latitude_deg: float,
     """
     obl = math.radians(obliquity_deg)
     lat = math.radians(latitude_deg)
-    n = np.array([math.sin(obl), 0.0, math.cos(obl)])      # spin axis
+    n = np.array([math.sin(obl), 0.0, math.cos(obl)])  # spin axis
     ea = np.cross(n, [0.0, 0.0, 1.0])
     if np.linalg.norm(ea) < 1e-8:
         ea = np.array([1.0, 0.0, 0.0])
@@ -598,7 +597,7 @@ def phase_rotations(sys, planet, latitude_deg: float = 20.0,
             rise = 0.5 * (rho[k] + rho[(k + 1) % n_scan])
         if a0 >= 0.0 > a1 and set_ is None:
             set_ = 0.5 * (rho[k] + rho[(k + 1) % n_scan])
-    if rise is None:                       # polar day / night fallback
+    if rise is None:  # polar day / night fallback
         rise = float(rho[i_noon] - 0.4)
     if set_ is None:
         set_ = float(rho[i_noon] + 0.4)
@@ -643,7 +642,6 @@ def _rayleigh_phase(mu: np.ndarray) -> np.ndarray:
     return 3.0 / (16.0 * math.pi) * (1.0 + mu ** 2)
 
 
-
 def _mie_phase(mu: np.ndarray, g: float) -> np.ndarray:
     g2 = g * g
     return (3.0 / (8.0 * math.pi) * ((1.0 - g2) * (1.0 + mu ** 2))
@@ -659,7 +657,7 @@ def _airglow_spectrum(lam: np.ndarray) -> np.ndarray:
 
 
 def _to_screen(D: np.ndarray, right, up, fwd, hfov: float,
-                W: int, H: int, p_top: float, p_bot: float):
+               W: int, H: int, p_top: float, p_bot: float):
     """Project system-frame directions D (...,3) to (col, row,
     in_front).  Inverse of the per-pixel ray construction."""
     z = D @ fwd
@@ -685,7 +683,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
                max_dark_gain: float = 2000.0,
                bg_seed: int = 2026, show_bodies: bool = True
                ) -> Tuple[np.ndarray, float, List[StarSky],
-                          np.ndarray, List[SkyBody]]:
+np.ndarray, List[SkyBody]]:
     """Render one ground-to-sky frame.
 
     Returns (rgb HxWx3 uint8, exposure_used, star_sky_list,
@@ -720,7 +718,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
         s_local.append(v)
         s_alt.append(math.asin(np.clip(v[2], -1.0, 1.0)))
         pl = planck_spectral(lam, st.teff)
-        pl = pl / np.trapezoid(pl, lam * 1e-9)      # unit visible power
+        pl = pl / np.trapezoid(pl, lam * 1e-9)  # unit visible power
         s_spec.append(st.flux_rel * pl)
     s_alt = np.array(s_alt)
 
@@ -749,8 +747,8 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
     cp, sp = np.cos(pitch), np.sin(pitch)
     cy, sy = np.cos(yaw), np.sin(yaw)
     vd = (cp * cy)[..., None] * fwd \
-        + (cp * sy)[..., None] * right \
-        + sp[..., None] * up
+         + (cp * sy)[..., None] * right \
+         + sp[..., None] * up
     vd = (vd / np.linalg.norm(vd, axis=-1, keepdims=True)).reshape(-1, 3)
     NP = vd.shape[0]
 
@@ -777,7 +775,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
     Aa, Ba, Ca = _ellipsoid_quadratic(O, vd, atmo.r_atmo_m,
                                       f_obl, spin_local)
     t_atmo = (-Ba + np.sqrt(np.maximum(Ba ** 2 - 4.0 * Aa * Ca, 0.0))) \
-        / (2.0 * Aa)
+             / (2.0 * Aa)
     t_end = np.minimum(t_ground, t_atmo)
 
     spec = np.zeros((NP, n_lambda))
@@ -824,7 +822,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
             gnd += (s_spec[si][None, :] * tg
                     * (ndl * (~blk).astype(float))[:, None])
         amb = 0.10 * np.sum([s.flux_rel for s in stars]) \
-            * np.ones(n_lambda)[None, :]
+              * np.ones(n_lambda)[None, :]
         gnd = (gnd + amb) * atmo.ground_albedo[None, :] / math.pi
         tau_v = (atmo.beta_r[None, :] * odr_v[gmask, None]
                  + _MIE_EXT_FACT * atmo.beta_m * odm_v[gmask, None])
@@ -853,13 +851,13 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
         atmo.beta_r[None, :] * odr_v[:, None]
         + _MIE_EXT_FACT * atmo.beta_m * odm_v[:, None], 0.0, 60.0))
     # Orbital -> local rotation (rows are the local basis vectors).
-    _Rml = np.stack([east, north, zenith])          # (3,3)
-    alt_pix = vd[:, 2]                               # local zenith comp
+    _Rml = np.stack([east, north, zenith])  # (3,3)
+    alt_pix = vd[:, 2]  # local zenith comp
     sky_pix = (~hit_ground) & (alt_pix > -0.02)
     dirs0, bteff, bflux, pn0 = background_starfield(bg_seed)
-    dirs = dirs0 @ _Rml.T                            # -> local frame
-    pn = _Rml @ np.asarray(pn0)                      # galactic normal
-    z_orb = _Rml @ np.array([0.0, 0.0, 1.0])         # ecliptic normal
+    dirs = dirs0 @ _Rml.T  # -> local frame
+    pn = _Rml @ np.asarray(pn0)  # galactic normal
+    z_orb = _Rml @ np.array([0.0, 0.0, 1.0])  # ecliptic normal
     if np.any(sky_pix):
         airg = _airglow_spectrum(lam)
         van = np.clip(
@@ -907,7 +905,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
     if show_bodies:
         px_per_rad = (H - 1) / (pitch_top - pitch_bot)
         for b in sky_bodies(sys, planet, lam, t_orbit, orbit_phase):
-            D = _Rml @ b.dir_inertial               # -> local frame
+            D = _Rml @ b.dir_inertial  # -> local frame
             if float(D[2]) <= 0.01:
                 continue
             c1, r1, infr = _to_screen(D[None, :], right, up, fwd, hfov,
@@ -918,7 +916,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
             rad_px = b.ang_radius_rad * px_per_rad
             rad_eff = max(rad_px, 0.7)
             omega = max(math.pi * b.ang_radius_rad ** 2, 1e-12)
-            sdir = _Rml @ b.sub_star_dir             # -> local frame
+            sdir = _Rml @ b.sub_star_dir  # -> local frame
             ssx, ssy = float(sdir @ right), -float(sdir @ up)
             sn = math.hypot(ssx, ssy) + 1e-9
             ssx, ssy = ssx / sn, ssy / sn
@@ -944,7 +942,7 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
             else:
                 shade = np.exp(-rr2 / (2.0 * 0.55 ** 2))
                 rad_disk = b.refl_spec / (math.pi
-                           * (rad_eff / px_per_rad) ** 2 + 1e-12)
+                                          * (rad_eff / px_per_rad) ** 2 + 1e-12)
             ridx = ii2[inside] * W + jj2[inside]
             tvb = np.exp(-np.clip(
                 atmo.beta_r[None, :] * odr_v[ridx, None]
@@ -982,7 +980,6 @@ def render_sky(sys, planet, *, latitude_deg: float = 20.0,
     return rgb, float(exposure), stars, s_alt, vis_bodies
 
 
-
 # ---------------------------------------------------------------------
 # Phase stills + day-cycle animation
 # ---------------------------------------------------------------------
@@ -995,7 +992,7 @@ def _body_line(bodies) -> str:
     for b in ranked[:3]:
         ph = b.phase_frac
         tag = ("full" if ph > 0.92 else "new" if ph < 0.08
-               else f"{ph:.0%}")
+        else f"{ph:.0%}")
         parts.append(f"{b.name} ({b.kind[:1]}, {tag})")
     return "moons/planets: " + "  ".join(parts)
 
@@ -1081,7 +1078,7 @@ def animate_day(sys, planet, out_path: str, *, n_frames: int = 120,
         sys, planet, latitude_deg=latitude_deg, rot_phase=phases["noon"],
         orbit_phase=orbit_phase, resolution=resolution, **kw)
     rots = np.linspace(0.0, 2.0 * math.pi, n_frames, endpoint=False) \
-        + phases["midnight"]
+           + phases["midnight"]
 
     fig = plt.figure(figsize=(resolution[0] / dpi, resolution[1] / dpi),
                      dpi=dpi)

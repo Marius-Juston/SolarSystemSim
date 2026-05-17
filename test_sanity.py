@@ -1,27 +1,20 @@
 """Sanity tests against known reference values."""
 import math
 import warnings
+
 import numpy as np
 
-from goldilocks.stellar           import Star, T_EFF_SUN_K
-from goldilocks.habitable_zone    import single_star_hz, seff_for_limit, hz_distance
-from goldilocks.stability         import (holman_wiegert_stype, holman_wiegert_ptype,
-                               mardling_aarseth_stable,
-                               max_planets_in_zone)
-from goldilocks.roche             import eggleton_roche_radius, roche_lobe_periastron
-from goldilocks.secular           import (heppenheimer_e_forced_stype,
-                               leung_lee_e_forced_ptype,
-                               laplace_coefficient,
-                               secular_max_eccentricities)
-from goldilocks.kepler            import kepler_two_body, orbital_period
-from goldilocks.system            import StarSystem
-from goldilocks.planets           import (earth_analog, kepler16_b, kepler34_b,
-                               kepler35_b, kepler38_b,
-                               kepler47_b, kepler47_d, kepler47_c)
-
+from goldilocks.habitable_zone import single_star_hz
+from goldilocks.kepler import kepler_two_body, orbital_period
+from goldilocks.roche import eggleton_roche_radius
+from goldilocks.secular import (heppenheimer_e_forced_stype,
+                                leung_lee_e_forced_ptype,
+                                secular_max_eccentricities)
+from goldilocks.stability import (mardling_aarseth_stable)
+from goldilocks.stellar import Star, T_EFF_SUN_K
+from goldilocks.system import StarSystem
 
 warnings.simplefilter("default")
-
 
 print("=" * 72)
 print("1.  Single-star HZ (the Sun)")
@@ -76,10 +69,10 @@ print("5.  Laplace-Lagrange coupling: 2-planet test")
 print("=" * 72)
 # Earth + Jupiter-mass at 1, 5 AU around Sun: classical case
 # Earth's forced e ~ a few * 1e-2 from Jupiter, modes are well known.
-masses = [1.0, 317.83]                # Earth, Jupiter (Mearth)
-sma    = [1.0, 5.20]
-e_max  = secular_max_eccentricities(masses, sma, 1.0,
-                                    initial_eccentricities=[0.0167, 0.0489])
+masses = [1.0, 317.83]  # Earth, Jupiter (Mearth)
+sma = [1.0, 5.20]
+e_max = secular_max_eccentricities(masses, sma, 1.0,
+                                   initial_eccentricities=[0.0167, 0.0489])
 print(f"  Earth-Jupiter e_max: Earth={e_max[0]:.4f}, Jupiter={e_max[1]:.4f}")
 print(f"  (expected: Earth ~0.063 (max), Jupiter ~0.061)")
 
@@ -111,12 +104,11 @@ print("8.  Mardling-Aarseth hierarchical stability check")
 print("=" * 72)
 # Alpha Cen A+B at 23.4 AU + Proxima at 8700 AU, e_out = 0.5
 ok = mardling_aarseth_stable(23.4, 8700.0, 0.50,
-                              1.10, 0.907, 0.122)
+                             1.10, 0.907, 0.122)
 print(f"  Alpha Cen triple stable?  {ok}  (expect True)")
 ok = mardling_aarseth_stable(23.4, 50.0, 0.50,
-                              1.10, 0.907, 0.122)
+                             1.10, 0.907, 0.122)
 print(f"  Same triple at a_out=50: {ok}  (expect False)")
-
 
 print()
 print("=" * 72)
@@ -191,7 +183,7 @@ f_earth = oblateness_for(e_earth)
 fast = Planet("Fast", mass_me=1.0, radius_re=1.0,
               semi_major_axis_au=1.0, host_star_index=0)
 fast.habitability = profile_for_planet(fast, se, np.random.default_rng(0))
-fast.habitability.sidereal_day_h = 4.0          # rapid spin
+fast.habitability.sidereal_day_h = 4.0  # rapid spin
 f_fast = oblateness_for(fast)
 print(f"  oblateness Earth-analog={f_earth:.4f}  fast(4h)={f_fast:.3f}")
 assert 0.0 <= f_earth < 0.01, f_earth
@@ -225,42 +217,54 @@ pm.habitability = profile_for_planet(pm, sm, np.random.default_rng(0),
 lam = lambda_grid_nm()
 bs = {b.name: float(np.sum(b.refl_spec))
       for b in sky_bodies(sm, pm, lam, 0.0, 0.0)}
-print(f"  reflected-flux ratio m2/m1 = {bs['m2'] / max(bs['m1'],1e-30):.2f}")
+print(f"  reflected-flux ratio m2/m1 = {bs['m2'] / max(bs['m1'], 1e-30):.2f}")
 assert bs["m2"] > bs["m1"] > 0.0, bs
 
 # Multi-colour background stars: the field must span cool (red) to hot
 # (blue), and a 3000 K vs 20000 K black body must be red- vs blue-biased.
 from goldilocks.skyview import (planck_spectral, spectrum_to_srgb,
                                 lambda_grid_nm, atmosphere_for)
+
 _, bt, _, _ = background_starfield(2026)
 print(f"  background Teff range: {bt.min():.0f}-{bt.max():.0f} K")
 assert bt.min() < 3200.0 and bt.max() > 12000.0, (bt.min(), bt.max())
 _lam = lambda_grid_nm()
 from goldilocks.skyview import cie_xyz_bar as _cxb
+
 _, _yb, _ = _cxb(_lam)
 _dl = float(_lam[1] - _lam[0])
+
+
 def _rgb(T):
-    pl = planck_spectral(_lam, T); pl = pl / np.trapezoid(pl, _lam * 1e-9)
-    Y = float(np.dot(pl, _yb) * _dl)         # mid-tone, unsaturated
+    pl = planck_spectral(_lam, T);
+    pl = pl / np.trapezoid(pl, _lam * 1e-9)
+    Y = float(np.dot(pl, _yb) * _dl)  # mid-tone, unsaturated
     return spectrum_to_srgb(pl[None, :], _lam, 0.35 / max(Y, 1e-12))[0]
+
+
 cool, hot = _rgb(3000.0), _rgb(20000.0)
 print(f"  3000K rgb={tuple(int(c) for c in cool)}  "
       f"20000K rgb={tuple(int(c) for c in hot)}")
 assert int(cool[0]) > int(cool[2]) and int(hot[2]) >= int(hot[0]), \
     (cool, hot)
 
+
 # Distinct atmospheres: a thin N2/O2 vs a dense CO2 atmosphere must give
 # different Rayleigh scattering (different sky colour).
-class _P:                                 # minimal duck-typed planet
+class _P:  # minimal duck-typed planet
     radius_re = 1.0
+
     def __init__(self, prof): self.habitability = prof
+
+
 pa = profile_for_planet(
     Planet("a", mass_me=1.0, radius_re=1.0, semi_major_axis_au=1.0,
            host_star_index=0), se, np.random.default_rng(0), in_phz=True)
 pb = profile_for_planet(
     Planet("b", mass_me=1.0, radius_re=1.0, semi_major_axis_au=1.0,
            host_star_index=0), se, np.random.default_rng(0), in_phz=True)
-pb.dominant_gas = "CO2"; pb.surface_pressure_bar = 30.0
+pb.dominant_gas = "CO2";
+pb.surface_pressure_bar = 30.0
 pb.mean_molecular_weight = 44.0
 at_a = atmosphere_for(_P(pa), _lam)
 at_b = atmosphere_for(_P(pb), _lam)

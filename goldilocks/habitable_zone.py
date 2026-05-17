@@ -42,14 +42,14 @@ own periastron and apastron (see system.py).
 """
 
 from __future__ import annotations
+
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple, Optional
+from typing import Iterable
 
 import numpy as np
 
 from goldilocks.stellar import Star
-
 
 # -----------------------------------------------------------------------
 # Kopparapu 2013/2014 polynomial coefficients
@@ -57,18 +57,18 @@ from goldilocks.stellar import Star
 # -----------------------------------------------------------------------
 # Order:   RecentVenus, RunawayGH, MaxGH, EarlyMars, RG_5Me, RG_0.1Me
 _SEFF_SUN = np.array([1.776, 1.107, 0.356, 0.320, 1.188, 0.99])
-_A        = np.array([2.136e-4,  1.332e-4,  6.171e-5,  5.547e-5,  1.433e-4,  1.209e-4])
-_B        = np.array([2.533e-8,  1.580e-8,  1.698e-9,  1.526e-9,  1.707e-8,  1.404e-8])
-_C        = np.array([-1.332e-11, -8.308e-12, -3.198e-12, -2.874e-12, -8.968e-12, -7.418e-12])
-_D        = np.array([-3.097e-15, -1.931e-15, -5.575e-16, -5.011e-16, -2.084e-15, -1.713e-15])
+_A = np.array([2.136e-4, 1.332e-4, 6.171e-5, 5.547e-5, 1.433e-4, 1.209e-4])
+_B = np.array([2.533e-8, 1.580e-8, 1.698e-9, 1.526e-9, 1.707e-8, 1.404e-8])
+_C = np.array([-1.332e-11, -8.308e-12, -3.198e-12, -2.874e-12, -8.968e-12, -7.418e-12])
+_D = np.array([-3.097e-15, -1.931e-15, -5.575e-16, -5.011e-16, -2.084e-15, -1.713e-15])
 
 LIMIT_NAMES = (
-    "RecentVenus",       # optimistic inner
-    "RunawayGreenhouse", # conservative inner (1 Me)
-    "MaxGreenhouse",     # conservative outer
-    "EarlyMars",         # optimistic outer
-    "RG_5Me",            # conservative inner (5 Me)
-    "RG_0.1Me",          # conservative inner (0.1 Me)
+    "RecentVenus",  # optimistic inner
+    "RunawayGreenhouse",  # conservative inner (1 Me)
+    "MaxGreenhouse",  # conservative outer
+    "EarlyMars",  # optimistic outer
+    "RG_5Me",  # conservative inner (5 Me)
+    "RG_0.1Me",  # conservative inner (0.1 Me)
 )
 LIMIT_INDEX = {n: i for i, n in enumerate(LIMIT_NAMES)}
 
@@ -78,7 +78,7 @@ def seff_for_limit(teff_k: float, limit: str = "RunawayGreenhouse") -> float:
     Kopparapu HZ limit, valid for 2600 <= Teff <= 7200 K."""
     i = LIMIT_INDEX[limit]
     t = max(2600.0, min(7200.0, teff_k)) - 5780.0
-    return float(_SEFF_SUN[i] + _A[i]*t + _B[i]*t**2 + _C[i]*t**3 + _D[i]*t**4)
+    return float(_SEFF_SUN[i] + _A[i] * t + _B[i] * t ** 2 + _C[i] * t ** 3 + _D[i] * t ** 4)
 
 
 def hz_distance(star: Star, limit: str = "RunawayGreenhouse") -> float:
@@ -114,10 +114,10 @@ def single_star_hz(star: Star,
     else:
         inner_lim = "RG_0.1Me"
     return HZBoundaries(
-        optimistic_inner   = hz_distance(star, "RecentVenus"),
-        conservative_inner = hz_distance(star, inner_lim),
-        conservative_outer = hz_distance(star, "MaxGreenhouse"),
-        optimistic_outer   = hz_distance(star, "EarlyMars"),
+        optimistic_inner=hz_distance(star, "RecentVenus"),
+        conservative_inner=hz_distance(star, inner_lim),
+        conservative_outer=hz_distance(star, "MaxGreenhouse"),
+        optimistic_outer=hz_distance(star, "EarlyMars"),
     )
 
 
@@ -133,7 +133,7 @@ def spectral_weight(teff_k: float, limit: str = "RunawayGreenhouse") -> float:
     regardless of stellar mix.
     """
     i = LIMIT_INDEX[limit]
-    s_sun  = float(_SEFF_SUN[i])
+    s_sun = float(_SEFF_SUN[i])
     s_star = seff_for_limit(teff_k, limit)
     return s_sun / s_star
 
@@ -157,8 +157,8 @@ def hz_mask(grid_au: np.ndarray,
             stars: Iterable[Star],
             optimistic: bool = False) -> np.ndarray:
     """Vectorised habitability test on a grid of 3-D points."""
-    inner_lim = "RecentVenus"        if optimistic else "RunawayGreenhouse"
-    outer_lim = "EarlyMars"          if optimistic else "MaxGreenhouse"
+    inner_lim = "RecentVenus" if optimistic else "RunawayGreenhouse"
+    outer_lim = "EarlyMars" if optimistic else "MaxGreenhouse"
 
     grid = np.asarray(grid_au, dtype=float)
     flat = grid.reshape(-1, 3)
@@ -176,7 +176,7 @@ def hz_mask(grid_au: np.ndarray,
         r2 = np.where(r2 > 0.0, r2, np.nan)
         w_in = spectral_weight(s.teff, inner_lim)
         w_out = spectral_weight(s.teff, outer_lim)
-        flux_inner += w_in  * s.luminosity / r2
+        flux_inner += w_in * s.luminosity / r2
         flux_outer += w_out * s.luminosity / r2
 
     hab = (flux_inner <= s_sun_inner) & (flux_outer >= s_sun_outer)

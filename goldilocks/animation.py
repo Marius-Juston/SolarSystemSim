@@ -31,25 +31,22 @@ Output is an MP4 via ffmpeg.
 """
 
 from __future__ import annotations
+
 import math
 from typing import Optional, Tuple, List
 
-import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
-from   matplotlib.animation import FuncAnimation, FFMpegWriter
+import numpy as np
+from matplotlib.animation import FuncAnimation, FFMpegWriter
 
-from goldilocks.system           import StarSystem
 import goldilocks.habitable_zone as hz
-import goldilocks.secular        as sec
-from goldilocks.kepler           import (orbital_period, solve_kepler, kepler_two_body,
-                              G_AU3_MSUN_YR2)
-from goldilocks.nbody            import (StarTrajectory, planet_initial_state,
+import goldilocks.secular as sec
+from goldilocks.kepler import (orbital_period)
+from goldilocks.nbody import (StarTrajectory, planet_initial_state,
                               integrate_planets)
-
+from goldilocks.system import StarSystem
 
 M_EARTH_OVER_M_SUN = 3.0034893e-6
-
 
 STAR_COLORS = {
     "O": "#9BB0FF", "B": "#AABFFF", "A": "#CAD7FF",
@@ -60,10 +57,10 @@ STAR_COLORS = {
 def _star_color(teff_k: float) -> str:
     if teff_k > 30000: return STAR_COLORS["O"]
     if teff_k > 10000: return STAR_COLORS["B"]
-    if teff_k >  7500: return STAR_COLORS["A"]
-    if teff_k >  6000: return STAR_COLORS["F"]
-    if teff_k >  5200: return STAR_COLORS["G"]
-    if teff_k >  3700: return STAR_COLORS["K"]
+    if teff_k > 7500: return STAR_COLORS["A"]
+    if teff_k > 6000: return STAR_COLORS["F"]
+    if teff_k > 5200: return STAR_COLORS["G"]
+    if teff_k > 3700: return STAR_COLORS["K"]
     return STAR_COLORS["M"]
 
 
@@ -82,11 +79,10 @@ def _setup_planets(sys: StarSystem,
                    t0: float,
                    rng: np.random.Generator
                    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[dict]]:
-
     sys._update_stellar_positions(t0)
     omega_bin = sys.stellar_orbits[0][4] if sys.stellar_orbits else 0.0
-    a_bin     = sys.stellar_orbits[0][2] if sys.stellar_orbits else None
-    e_bin     = sys.stellar_orbits[0][3] if sys.stellar_orbits else 0.0
+    a_bin = sys.stellar_orbits[0][2] if sys.stellar_orbits else None
+    e_bin = sys.stellar_orbits[0][3] if sys.stellar_orbits else 0.0
 
     positions, velocities, masses, meta = [], [], [], []
 
@@ -98,7 +94,7 @@ def _setup_planets(sys: StarSystem,
         host_pos = np.array(host.position)
         host_vel = np.array(host.velocity)
         for i, (a_p, e_max) in enumerate(zip(entry["positions"],
-                                              entry["e_max"])):
+                                             entry["e_max"])):
             if a_bin is not None:
                 e0 = sec.heppenheimer_e_forced_stype(a_p, a_bin, e_bin)
             else:
@@ -117,9 +113,9 @@ def _setup_planets(sys: StarSystem,
             velocities.append(v)
             masses.append(1.0)
             meta.append({"kind": "S", "host_idx": host_idx,
-                          "a": a_p, "e0": e0, "inc_rad": inc,
-                          "color": "#56C7FF",
-                          "label": f"{host.name} p{i+1}"})
+                         "a": a_p, "e0": e0, "inc_rad": inc,
+                         "color": "#56C7FF",
+                         "label": f"{host.name} p{i + 1}"})
 
     # ----- P-type packed planets -----
     if res.get("circumbinary") and res["circumbinary"].get("positions"):
@@ -128,7 +124,7 @@ def _setup_planets(sys: StarSystem,
         mu = (min(sys.stars[0].mass, sys.stars[1].mass) / m_tot
               if len(sys.stars) >= 2 else 0.0)
         for i, (a_p, e_max) in enumerate(zip(res["circumbinary"]["positions"],
-                                              res["circumbinary"]["e_max"])):
+                                             res["circumbinary"]["e_max"])):
             if a_bin is not None:
                 e0 = sec.leung_lee_e_forced_ptype(a_p, a_bin, e_bin, mu)
             else:
@@ -145,9 +141,9 @@ def _setup_planets(sys: StarSystem,
             velocities.append(v)
             masses.append(1.0)
             meta.append({"kind": "P", "host_idx": None,
-                          "a": a_p, "e0": e0, "inc_rad": inc,
-                          "color": "#FF8A33",
-                          "label": f"CBP {i+1}"})
+                         "a": a_p, "e0": e0, "inc_rad": inc,
+                         "color": "#FF8A33",
+                         "label": f"CBP {i + 1}"})
 
     # ----- Known catalogued planets -----
     for p in sys.planets:
@@ -179,8 +175,8 @@ def _setup_planets(sys: StarSystem,
         velocities.append(v)
         masses.append(p.mass_me)
         meta.append({"kind": "KNOWN", "host_idx": p.host_star_index,
-                      "a": a_p, "e0": e_p, "inc_rad": inc,
-                      "color": "#FF44AA", "label": p.name})
+                     "a": a_p, "e0": e_p, "inc_rad": inc,
+                     "color": "#FF44AA", "label": p.name})
 
     if not positions:
         return (np.zeros((0, 3)), np.zeros((0, 3)),
@@ -267,18 +263,18 @@ def animate_system(sys: StarSystem,
         duration = 5.0
     times = np.linspace(0.0, duration, n_frames)
     P_inner = (sys.stellar_orbit_period(0) if sys.stellar_orbits
-                else duration)
+               else duration)
 
     # Pre-compute the packing
     res = sys.count_habitable_planets(planet_mass_me=planet_mass_me,
-                                       delta=delta,
-                                       optimistic=optimistic,
-                                       use_phz=True)
+                                      delta=delta,
+                                      optimistic=optimistic,
+                                      use_phz=True)
 
     # Set up N-body planet initial conditions
     rng = np.random.default_rng(seed=42)
     pos0, vel0, p_masses_me, meta = _setup_planets(sys, res, t0=0.0,
-                                                    rng=rng)
+                                                   rng=rng)
 
     # Star trajectory
     star_masses = np.array([s.mass for s in sys.stars])
@@ -292,7 +288,7 @@ def animate_system(sys: StarSystem,
         # Approximate min host mass
         min_host_mass = min(
             star_masses[m["host_idx"]] if m["kind"] != "P"
-            and m["host_idx"] is not None
+                                          and m["host_idx"] is not None
             else float(np.sum(star_masses)) for m in meta)
         P_min = orbital_period(min_host_mass, 0.0, min_a)
         dt_max = P_min / 40.0  # at least 40 steps per shortest period
@@ -302,7 +298,7 @@ def animate_system(sys: StarSystem,
         n_sub_needed = min(n_sub_needed, 2000)
         print(f"  N-body integrating {pos0.shape[0]} planets, "
               f"{n_frames} samples, {n_sub_needed} sub-steps each "
-              f"(min P_planet = {P_min*365.25:.1f} d)...")
+              f"(min P_planet = {P_min * 365.25:.1f} d)...")
         planet_hist, star_hist = integrate_planets(
             traj, pos0, vel0, p_masses_me, times,
             sub_steps_per_sample=n_sub_needed)
@@ -324,7 +320,7 @@ def animate_system(sys: StarSystem,
         if entry["stable_HZ"] is None:
             continue
         phz_stype.append((host_idx, entry["stable_HZ"][0],
-                           entry["stable_HZ"][1]))
+                          entry["stable_HZ"][1]))
     phz_ptype = None
     if res.get("circumbinary"):
         phz_ptype = (res["circumbinary"]["stable_HZ"][0],
@@ -342,25 +338,25 @@ def animate_system(sys: StarSystem,
         gs = fig.add_gridspec(2, 2, width_ratios=[1.0, 1.0],
                               height_ratios=[1.0, 0.55],
                               hspace=0.28, wspace=0.18)
-        ax_top   = fig.add_subplot(gs[0, 0])
+        ax_top = fig.add_subplot(gs[0, 0])
         ax_outer = fig.add_subplot(gs[0, 1])
-        ax_side  = fig.add_subplot(gs[1, :])
+        ax_side = fig.add_subplot(gs[1, :])
     elif show_side_view:
         fig = plt.figure(figsize=(11.0, 13.5))
         gs = fig.add_gridspec(2, 1, height_ratios=[1.0, 0.55],
                               hspace=0.22)
-        ax_top  = fig.add_subplot(gs[0])
+        ax_top = fig.add_subplot(gs[0])
         ax_side = fig.add_subplot(gs[1])
         ax_outer = None
     elif outer_extent is not None:
         fig = plt.figure(figsize=(16.0, 8.0))
         gs = fig.add_gridspec(1, 2, width_ratios=[1.0, 1.0], wspace=0.2)
-        ax_top   = fig.add_subplot(gs[0])
+        ax_top = fig.add_subplot(gs[0])
         ax_outer = fig.add_subplot(gs[1])
-        ax_side  = None
+        ax_side = None
     else:
         fig, ax_top = plt.subplots(figsize=(9.5, 9.5))
-        ax_side  = None
+        ax_side = None
         ax_outer = None
 
     fig.patch.set_facecolor("#15161c")
@@ -378,8 +374,8 @@ def animate_system(sys: StarSystem,
     ax_top.set_xlabel("x  [AU]", color="white")
     ax_top.set_ylabel("y  [AU]", color="white")
     title = ax_top.set_title(f"{sys.name}  --  t = 0.000 yr"
-                              f"  (P_bin = {P_inner:.3g} yr)",
-                              color="white", fontsize=12)
+                             f"  (P_bin = {P_inner:.3g} yr)",
+                             color="white", fontsize=12)
 
     if ax_side is not None:
         ax_side.set_xlim(-inner_extent, inner_extent)
@@ -388,7 +384,7 @@ def animate_system(sys: StarSystem,
         ax_side.set_xlabel("x  [AU]", color="white")
         ax_side.set_ylabel("z  [AU]", color="white")
         ax_side.set_title("Edge-on view: orbital inclinations visible",
-                           color="white", fontsize=11)
+                          color="white", fontsize=11)
 
     if ax_outer is not None:
         ax_outer.set_aspect("equal", "box")
@@ -397,26 +393,26 @@ def animate_system(sys: StarSystem,
         ax_outer.set_xlabel("x  [AU]", color="white")
         ax_outer.set_ylabel("y  [AU]", color="white")
         ax_outer.set_title(f"Hierarchical view (+/-{outer_extent:.0f} AU)",
-                            color="white", fontsize=11)
+                           color="white", fontsize=11)
 
     # PHZ rings (top view, recentered on inner bary frame)
-    theta_circle = np.linspace(0, 2*math.pi, 200)
+    theta_circle = np.linspace(0, 2 * math.pi, 200)
     cos_t = np.cos(theta_circle)
     sin_t = np.sin(theta_circle)
     phz_rings_top = []
     for host_idx, r_in, r_out in phz_stype:
-        poly = ax_top.fill(np.zeros(2*len(theta_circle)+1),
-                            np.zeros(2*len(theta_circle)+1),
-                            color="#1B8B1B", alpha=0.25, zorder=3,
-                            edgecolor="#3FAE3F", linewidth=0.7)[0]
+        poly = ax_top.fill(np.zeros(2 * len(theta_circle) + 1),
+                           np.zeros(2 * len(theta_circle) + 1),
+                           color="#1B8B1B", alpha=0.25, zorder=3,
+                           edgecolor="#3FAE3F", linewidth=0.7)[0]
         phz_rings_top.append((host_idx, r_in, r_out, poly))
     phz_ring_ptype = None
     if phz_ptype is not None:
         r_in, r_out = phz_ptype
-        poly = ax_top.fill(np.zeros(2*len(theta_circle)+1),
-                            np.zeros(2*len(theta_circle)+1),
-                            color="#1B8B1B", alpha=0.25, zorder=3,
-                            edgecolor="#FF8A33", linewidth=0.7)[0]
+        poly = ax_top.fill(np.zeros(2 * len(theta_circle) + 1),
+                           np.zeros(2 * len(theta_circle) + 1),
+                           color="#1B8B1B", alpha=0.25, zorder=3,
+                           edgecolor="#FF8A33", linewidth=0.7)[0]
         phz_ring_ptype = (r_in, r_out, poly)
 
     dynamic_hz_contour = [None]
@@ -435,33 +431,33 @@ def animate_system(sys: StarSystem,
                             linewidths=1.2, zorder=10)
         star_scatters_top.append(sc)
         tr, = ax_top.plot([], [], color="white", lw=0.5, alpha=0.40,
-                           zorder=6)
+                          zorder=6)
         star_trails_top.append(tr)
         if ax_side is not None:
             sc = ax_side.scatter([], [], s=sz, c=c, edgecolors="white",
-                                  linewidths=1.0, zorder=10)
+                                 linewidths=1.0, zorder=10)
             star_scatters_side.append(sc)
             tr, = ax_side.plot([], [], color="white", lw=0.5, alpha=0.35,
-                                zorder=6)
+                               zorder=6)
             star_trails_side.append(tr)
         if ax_outer is not None:
-            sc = ax_outer.scatter([], [], s=max(40, 0.7*sz), c=c,
-                                   edgecolors="white", linewidths=1.0,
-                                   zorder=10)
+            sc = ax_outer.scatter([], [], s=max(40, 0.7 * sz), c=c,
+                                  edgecolors="white", linewidths=1.0,
+                                  zorder=10)
             star_scatters_outer.append(sc)
             tr, = ax_outer.plot([], [], color="white", lw=0.5, alpha=0.35,
-                                 zorder=6)
+                                zorder=6)
             star_trails_outer.append(tr)
 
     # Planet markers + trails
-    planet_scatters_top  = []
-    planet_trails_top    = []
+    planet_scatters_top = []
+    planet_trails_top = []
     planet_scatters_side = []
-    planet_trails_side   = []
+    planet_trails_side = []
     planet_scatters_outer = []
     planet_trails_outer = []
     planet_history_inner = [[[], [], []] for _ in meta]
-    planet_history_abs   = [[[], [], []] for _ in meta]
+    planet_history_abs = [[[], [], []] for _ in meta]
     for m in meta:
         color = m["color"]
         size = 40 if m["kind"] == "KNOWN" else 28
@@ -469,34 +465,34 @@ def animate_system(sys: StarSystem,
                             linewidths=0.7, zorder=12)
         planet_scatters_top.append(sc)
         tr, = ax_top.plot([], [], color=color, lw=0.9, alpha=0.85,
-                           zorder=7)
+                          zorder=7)
         planet_trails_top.append(tr)
         if ax_side is not None:
             sc = ax_side.scatter([], [], s=size, c=color,
-                                  edgecolors="white", linewidths=0.7,
-                                  zorder=12)
+                                 edgecolors="white", linewidths=0.7,
+                                 zorder=12)
             planet_scatters_side.append(sc)
             tr, = ax_side.plot([], [], color=color, lw=0.9, alpha=0.85,
-                                zorder=7)
+                               zorder=7)
             planet_trails_side.append(tr)
         if ax_outer is not None:
-            sc = ax_outer.scatter([], [], s=max(8, 0.5*size), c=color,
-                                   edgecolors="white", linewidths=0.4,
-                                   zorder=12)
+            sc = ax_outer.scatter([], [], s=max(8, 0.5 * size), c=color,
+                                  edgecolors="white", linewidths=0.4,
+                                  zorder=12)
             planet_scatters_outer.append(sc)
             tr, = ax_outer.plot([], [], color=color, lw=0.6, alpha=0.7,
-                                 zorder=7)
+                                zorder=7)
             planet_trails_outer.append(tr)
 
     _make_legend(ax_top, meta, phz_ptype is not None)
     if ax_outer is not None:
         ax_outer.text(0.02, 0.97,
-                       "Full hierarchy (absolute coords)",
-                       transform=ax_outer.transAxes, color="white",
-                       fontsize=10, va="top",
-                       bbox=dict(boxstyle="round,pad=0.25",
-                                 facecolor="#15161c", alpha=0.5,
-                                 ec="none"))
+                      "Full hierarchy (absolute coords)",
+                      transform=ax_outer.transAxes, color="white",
+                      fontsize=10, va="top",
+                      bbox=dict(boxstyle="round,pad=0.25",
+                                facecolor="#15161c", alpha=0.5,
+                                ec="none"))
 
     def update(frame_idx):
         # Absolute star positions for this frame
@@ -531,7 +527,7 @@ def animate_system(sys: StarSystem,
             if ax_outer is not None:
                 star_scatters_outer[si].set_offsets([[x_abs, y_abs]])
                 star_trails_outer[si].set_data(star_history[si][0],
-                                                star_history[si][1])
+                                               star_history[si][1])
 
         # ----- PHZ rings (inner view, recentered) -----
         for host_idx, r_in, r_out, poly in phz_rings_top:
@@ -539,8 +535,8 @@ def animate_system(sys: StarSystem,
             cy = star_pos[host_idx][1] - bary_i[1]
             x_out = cx + r_out * cos_t
             y_out = cy + r_out * sin_t
-            x_in  = cx + r_in  * cos_t[::-1]
-            y_in  = cy + r_in  * sin_t[::-1]
+            x_in = cx + r_in * cos_t[::-1]
+            y_in = cy + r_in * sin_t[::-1]
             xy = np.column_stack([
                 np.concatenate([x_out, x_in, [x_out[0]]]),
                 np.concatenate([y_out, y_in, [y_out[0]]])])
@@ -553,8 +549,8 @@ def animate_system(sys: StarSystem,
             cy = bary[1] - bary_i[1]
             x_out = cx + r_out * cos_t
             y_out = cy + r_out * sin_t
-            x_in  = cx + r_in  * cos_t[::-1]
-            y_in  = cy + r_in  * sin_t[::-1]
+            x_in = cx + r_in * cos_t[::-1]
+            y_in = cy + r_in * sin_t[::-1]
             xy = np.column_stack([
                 np.concatenate([x_out, x_in, [x_out[0]]]),
                 np.concatenate([y_out, y_in, [y_out[0]]])])
@@ -600,7 +596,7 @@ def animate_system(sys: StarSystem,
             P_p = orbital_period(host_mass, 0.0, m["a"])
             n_orbits_shown = max(1.5, 1.5 * min(P_inner / P_p, 5.0))
             max_history = max(20, int(n_orbits_shown * P_p
-                                       / duration * n_frames))
+                                      / duration * n_frames))
             for arr in (planet_history_inner[pi],
                         planet_history_abs[pi]):
                 arr[0] = arr[0][-max_history:]
@@ -609,15 +605,15 @@ def animate_system(sys: StarSystem,
 
             planet_scatters_top[pi].set_offsets([[x_in, y_in]])
             planet_trails_top[pi].set_data(planet_history_inner[pi][0],
-                                            planet_history_inner[pi][1])
+                                           planet_history_inner[pi][1])
             if ax_side is not None:
                 planet_scatters_side[pi].set_offsets([[x_in, z_in]])
                 planet_trails_side[pi].set_data(planet_history_inner[pi][0],
-                                                 planet_history_inner[pi][2])
+                                                planet_history_inner[pi][2])
             if ax_outer is not None:
                 planet_scatters_outer[pi].set_offsets([[x_abs, y_abs]])
                 planet_trails_outer[pi].set_data(planet_history_abs[pi][0],
-                                                  planet_history_abs[pi][1])
+                                                 planet_history_abs[pi][1])
 
         title.set_text(f"{sys.name}  --  t = {times[frame_idx]:.3g} yr"
                        f"  (P_bin = {P_inner:.3g} yr)")
@@ -625,7 +621,7 @@ def animate_system(sys: StarSystem,
 
     print(f"  Rendering {n_frames} frames at {fps} fps -> {save_path}")
     anim = FuncAnimation(fig, update, frames=n_frames,
-                         interval=1000.0/fps, blit=False)
+                         interval=1000.0 / fps, blit=False)
     writer = FFMpegWriter(fps=fps, bitrate=2800,
                           codec="libx264",
                           extra_args=["-pix_fmt", "yuv420p"])
@@ -635,8 +631,8 @@ def animate_system(sys: StarSystem,
 
 
 def _make_legend(ax, meta, has_ptype):
-    items = [("PHZ (Goldilocks)",  "#1B8B1B"),
-             ("Snapshot HZ",       "#F0D060")]
+    items = [("PHZ (Goldilocks)", "#1B8B1B"),
+             ("Snapshot HZ", "#F0D060")]
     if any(m["kind"] == "S" for m in meta):
         items.append(("S-type planet (N-body)", "#56C7FF"))
     if has_ptype:

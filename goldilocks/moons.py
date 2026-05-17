@@ -42,17 +42,16 @@ Domingos R.C., Winter O.C., Yokoyama T. 2006, MNRAS 373, 1227
 """
 
 from __future__ import annotations
-import math
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 from typing import List, Optional
 
 import numpy as np
 
+from goldilocks import stability as stab
 from goldilocks.planets import (radius_from_mass_me, bulk_density_gcc,
                                 is_gas_giant, M_EARTH_OVER_M_SUN,
                                 R_EARTH_KM)
-from goldilocks import stability as stab
-
 
 AU_KM = 1.495978707e8
 R_EARTH_AU = R_EARTH_KM / AU_KM
@@ -64,14 +63,14 @@ R_EARTH_AU = R_EARTH_KM / AU_KM
 @dataclass
 class Moon:
     name: str
-    mass_me: float                       # Earth masses
-    radius_re: Optional[float] = None    # Earth radii
-    a_planet_au: float = 0.0             # SMA relative to the host planet
+    mass_me: float  # Earth masses
+    radius_re: Optional[float] = None  # Earth radii
+    a_planet_au: float = 0.0  # SMA relative to the host planet
     eccentricity: float = 0.0
     inclination_deg: float = 0.0
     retrograde: bool = False
     density_gcc: float = 2.0
-    kind: str = "regular"                # "regular" | "irregular"
+    kind: str = "regular"  # "regular" | "irregular"
 
     def __post_init__(self) -> None:
         if self.radius_re is None:
@@ -119,8 +118,8 @@ def planet_hill_radius_au(planet_mass_me: float,
 # ---------------------------------------------------------------------
 def _moon_density(rng: np.random.Generator, icy: bool) -> float:
     if icy:
-        return float(rng.uniform(1.2, 2.2))     # ice-rich (Ganymede-like)
-    return float(rng.uniform(2.8, 3.8))         # rocky (Io/Moon-like)
+        return float(rng.uniform(1.2, 2.2))  # ice-rich (Ganymede-like)
+    return float(rng.uniform(2.8, 3.8))  # rocky (Io/Moon-like)
 
 
 def generate_moons(planet,
@@ -146,9 +145,9 @@ def generate_moons(planet,
     if giant:
         # lognormal-ish: dozens to >100 (Jupiter 95, Saturn 146 known)
         n_total = int(np.clip(rng.normal(85.0, 35.0), 24, 170))
-        n_regular = int(rng.integers(3, 9))     # Galilean/Saturnian-like
+        n_regular = int(rng.integers(3, 9))  # Galilean/Saturnian-like
     else:
-        n_total = int(rng.integers(0, 3))       # 0, 1 or 2
+        n_total = int(rng.integers(0, 3))  # 0, 1 or 2
         n_regular = n_total
     n_total = max(n_total, 0)
     n_regular = min(n_regular, n_total)
@@ -169,9 +168,9 @@ def generate_moons(planet,
         icy = bool(rng.random() < 0.5)
         rho_m = _moon_density(rng, icy)
         if giant:
-            m_me = float(10 ** rng.uniform(-3.3, -1.5))   # ~5e-4..0.03 Me
+            m_me = float(10 ** rng.uniform(-3.3, -1.5))  # ~5e-4..0.03 Me
         else:
-            m_me = float(10 ** rng.uniform(-2.5, -1.8))   # up to ~Moon mass
+            m_me = float(10 ** rng.uniform(-2.5, -1.8))  # up to ~Moon mass
         r_re = radius_from_mass_me(m_me)
         roche = planetary_roche_limit_au(planet.radius_re, rho_p, rho_m)
         a_min = 1.5 * roche
@@ -185,7 +184,7 @@ def generate_moons(planet,
                 planet.mass_me * M_EARTH_OVER_M_SUN)
             a = a_cursor + max(8.0 * rh, 0.25 * a_cursor)
         if a >= f_pro:
-            break                                 # ran out of stable room
+            break  # ran out of stable room
         e = float(abs(rng.normal(0.0, 0.01)))
         inc = float(abs(rng.normal(0.0, 1.5)))
         moons.append(Moon(
@@ -197,7 +196,7 @@ def generate_moons(planet,
 
     # ----- irregular (small, distant, eccentric, often retrograde) -----
     for j in range(n_irregular):
-        retro = bool(rng.random() < 0.75)         # capture favours retro
+        retro = bool(rng.random() < 0.75)  # capture favours retro
         icy = bool(rng.random() < 0.4)
         rho_m = _moon_density(rng, icy)
         m_me = float(10 ** rng.uniform(-7.0, -3.5))

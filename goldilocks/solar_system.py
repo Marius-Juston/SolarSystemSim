@@ -30,28 +30,27 @@ The generator then:
 """
 
 from __future__ import annotations
+
 import math
 from typing import List, Optional, Tuple
 
 import numpy as np
 
-from goldilocks.stellar import Star
-from goldilocks.system import StarSystem
-from goldilocks.planets import Planet, radius_from_mass_me, is_gas_giant
-from goldilocks.moons import generate_moons
+from goldilocks import stability as stab
 from goldilocks.habitability import profile_for_planet
+from goldilocks.moons import generate_moons
+from goldilocks.planets import Planet, radius_from_mass_me, is_gas_giant
 from goldilocks.random_systems import (_random_mass,
                                        _random_binary_separation,
                                        _random_binary_eccentricity)
-from goldilocks import stability as stab
-
+from goldilocks.stellar import Star
+from goldilocks.system import StarSystem
 
 # Smith & Lissauer 2009 long-term (Lagrange/Gyr) packing separation, in
 # mutual Hill radii.  >= ~8-10 is required for multi-Gyr stability.
 HILL_SPACING_DELTA = 9.0
 
-
-STAR_COUNT_PMF = {1: 0.56, 2: 0.33, 3: 0.08, 4: 0.03}   # Raghavan+2010
+STAR_COUNT_PMF = {1: 0.56, 2: 0.33, 3: 0.08, 4: 0.03}  # Raghavan+2010
 
 
 # ---------------------------------------------------------------------
@@ -85,7 +84,7 @@ def _build_stars(rng: np.random.Generator,
     if n == 2:
         m1 = _random_mass(rng, 0.5, 1.4)
         m2 = m1 * float(rng.uniform(0.3, 1.0))
-        kind = rng.choice(["tight", "wide"])      # circumbinary or S-type
+        kind = rng.choice(["tight", "wide"])  # circumbinary or S-type
         a = _random_binary_separation(rng, kind=kind)
         e = _random_binary_eccentricity(rng, a)
         A = Star("Star A", mass=m1)
@@ -167,20 +166,20 @@ def _make_planet(name: str, a: float, m: float, host_idx: Optional[int],
 
 
 def _populate_planets(sys: StarSystem,
-                       band_kind: str, host_idx: Optional[int],
-                       band: Tuple[float, float],
-                       rng: np.random.Generator) -> List[Planet]:
+                      band_kind: str, host_idx: Optional[int],
+                      band: Tuple[float, float],
+                      rng: np.random.Generator) -> List[Planet]:
     if band_kind == "S":
         L = sys.stars[host_idx].luminosity
         host_mass = sys.stars[host_idx].mass
         phost: Optional[int] = host_idx
-    else:                                     # circumbinary
+    else:  # circumbinary
         L = sys.total_luminosity()
         host_mass = sum(s.mass for s in sys.stars)
         phost = None
     snow = 2.7 * math.sqrt(max(L, 1e-4))
     b_in, b_out = band
-    a_phz = math.sqrt(b_in * b_out)           # guaranteed-in-PHZ slot
+    a_phz = math.sqrt(b_in * b_out)  # guaranteed-in-PHZ slot
 
     a_lo = max(0.04, 0.35 * b_in)
     a_hi = max(6.0 * snow, 3.0 * b_out)
@@ -189,7 +188,7 @@ def _populate_planets(sys: StarSystem,
     # Hill radii between neighbours (Smith & Lissauer 2009), using each
     # planet's *actual* mass -- so a massive giant pushes its neighbours
     # genuinely far out instead of overlapping.
-    slots: List[Tuple[float, float]] = []          # (a, mass_me)
+    slots: List[Tuple[float, float]] = []  # (a, mass_me)
     a = a_lo
     guard = 0
     while a <= a_hi and guard < 400:

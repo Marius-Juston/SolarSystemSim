@@ -14,20 +14,20 @@ Kopparapu, R. K. et al. 2014, ApJ Letters, 787, L29
 """
 
 from __future__ import annotations
+
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 # Physical constants -----------------------------------------------------
-M_SUN_KG       = 1.98892e30          # kg
-L_SUN_W        = 3.828e26            # W (IAU 2015 nominal)
-R_SUN_M        = 6.957e8             # m
-AU_M           = 1.495978707e11      # m
-G_SI           = 6.67430e-11         # m^3 / kg / s^2
-SIGMA_SB       = 5.670374419e-8      # W / m^2 / K^4
-T_EFF_SUN_K    = 5772.0              # K (IAU 2015 nominal)
-YEAR_S         = 3.15576e7           # s
-
+M_SUN_KG = 1.98892e30  # kg
+L_SUN_W = 3.828e26  # W (IAU 2015 nominal)
+R_SUN_M = 6.957e8  # m
+AU_M = 1.495978707e11  # m
+G_SI = 6.67430e-11  # m^3 / kg / s^2
+SIGMA_SB = 5.670374419e-8  # W / m^2 / K^4
+T_EFF_SUN_K = 5772.0  # K (IAU 2015 nominal)
+YEAR_S = 3.15576e7  # s
 
 # -----------------------------------------------------------------------
 # Mass-Luminosity relation (Eker et al. 2018, six-piece classical MLR)
@@ -36,12 +36,12 @@ YEAR_S         = 3.15576e7           # s
 # -----------------------------------------------------------------------
 _EKER_MLR = [
     # (M_min, M_max, alpha, beta)
-    (0.179, 0.45,  2.028, -0.976),
-    (0.45,  0.72,  4.572, -0.102),
-    (0.72,  1.05,  5.743,  0.007),
-    (1.05,  2.40,  4.329,  0.010),
-    (2.40,  7.00,  3.967,  0.093),
-    (7.00, 31.00,  2.865,  1.105),
+    (0.179, 0.45, 2.028, -0.976),
+    (0.45, 0.72, 4.572, -0.102),
+    (0.72, 1.05, 5.743, 0.007),
+    (1.05, 2.40, 4.329, 0.010),
+    (2.40, 7.00, 3.967, 0.093),
+    (7.00, 31.00, 2.865, 1.105),
 ]
 
 
@@ -69,11 +69,11 @@ def luminosity_from_mass(mass_msun: float) -> float:
 # -----------------------------------------------------------------------
 def radius_from_mass(mass_msun: float) -> float:
     if mass_msun <= 1.5:
-        return 0.438 * mass_msun**2 + 0.479 * mass_msun + 0.075
+        return 0.438 * mass_msun ** 2 + 0.479 * mass_msun + 0.075
     # Demircan & Kahraman / Eker high-mass form: R ~ M^0.747
-    return 1.5**2 * 0.438 + 1.5 * 0.479 + 0.075 \
-           if mass_msun == 1.5 else \
-           (radius_from_mass(1.5)) * (mass_msun / 1.5) ** 0.747
+    return 1.5 ** 2 * 0.438 + 1.5 * 0.479 + 0.075 \
+        if mass_msun == 1.5 else \
+        (radius_from_mass(1.5)) * (mass_msun / 1.5) ** 0.747
 
 
 # -----------------------------------------------------------------------
@@ -105,10 +105,10 @@ class Star:
     flagged.
     """
     name: str
-    mass: Optional[float]  = None    # Msun
+    mass: Optional[float] = None  # Msun
     luminosity: Optional[float] = None  # Lsun
-    teff: Optional[float]  = None    # K
-    radius: Optional[float] = None   # Rsun
+    teff: Optional[float] = None  # K
+    radius: Optional[float] = None  # Rsun
     # Position and velocity (3-vectors), AU and AU/yr -- filled by System.
     position: tuple = (0.0, 0.0, 0.0)
     velocity: tuple = (0.0, 0.0, 0.0)
@@ -134,7 +134,7 @@ class Star:
                 # Crude inverse: use Sun as anchor, R~Rsun.
                 if self.radius is None:
                     self.radius = 1.0
-                self.luminosity = (self.radius**2) * (self.teff / T_EFF_SUN_K) ** 4
+                self.luminosity = (self.radius ** 2) * (self.teff / T_EFF_SUN_K) ** 4
             # Mass left as None if user really gave only L or Teff; downstream
             # routines that need mass will raise.
 

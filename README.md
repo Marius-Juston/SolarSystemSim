@@ -4,7 +4,7 @@ A research-grade Python package that computes the **Permanently Habitable
 Zone (PHZ)** for any single-star, binary, or hierarchical-triple stellar
 configuration, packs Earth-mass planets into that zone with realistic
 3-D orbital dynamics, and visualises everything with both static figures
-and animated MP4s.  All planet motion in the animations comes from a
+and animated MP4s. All planet motion in the animations comes from a
 full **N-body integration**: each planet feels the time-varying
 gravitational field of *every* star plus every other planet, producing
 genuine non-Keplerian wobble, apse/node precession, and -- for
@@ -30,23 +30,23 @@ Given a list of stars and their orbital configuration, the calculator:
    S-type and P-type orbits, and the **Eggleton 1983** Roche-lobe
    geometric cut.
 5. Models **multi-planet gravitational coupling**:
-   - **Heppenheimer 1978** forced eccentricity for S-type planets,
-   - **Leung-Lee 2013** forced eccentricity for circumbinary planets,
-   - **Laplace-Lagrange secular coupling** (Murray-Dermott 1999) for
-     planets in the same zone.
+    - **Heppenheimer 1978** forced eccentricity for S-type planets,
+    - **Leung-Lee 2013** forced eccentricity for circumbinary planets,
+    - **Laplace-Lagrange secular coupling** (Murray-Dermott 1999) for
+      planets in the same zone.
 6. Packs planets in the stable PHZ band with **Smith-Lissauer 2009**
    mutual-Hill-radius spacing (default delta = 10).
 7. Integrates every planet as a test particle in the full N-star
    gravitational field using a leapfrog scheme with adaptive
    sub-stepping (more steps for shorter planet periods).
 8. Renders 4-to-5-panel static figures and animated MP4s with:
-   - top-down (x-y) view recentered on the inner-binary barycentre,
-   - **side (x-z) view** showing real orbital inclinations (3-8 deg
-     S-type, 1-5 deg P-type),
-   - **multi-scale "wide view"** for hierarchical systems where the
-     outer companion sits far outside the inner zoom,
-   - eccentricity envelope per planet,
-   - moving HZ contours that respond to the binary's phase.
+    - top-down (x-y) view recentered on the inner-binary barycentre,
+    - **side (x-z) view** showing real orbital inclinations (3-8 deg
+      S-type, 1-5 deg P-type),
+    - **multi-scale "wide view"** for hierarchical systems where the
+      outer companion sits far outside the inner zoom,
+    - eccentricity envelope per planet,
+    - moving HZ contours that respond to the binary's phase.
 
 ## File layout
 
@@ -70,36 +70,37 @@ goldilocks/
 
 ## Sanity-check results
 
-| Test                                  | Value         | Reference          |
-|---------------------------------------|---------------|--------------------|
-| Sun runaway-greenhouse limit          | 0.951 AU      | 0.95 (Kopparapu)   |
-| Sun max-greenhouse limit              | 1.677 AU      | 1.67 (Kopparapu)   |
-| Equal-mass Eggleton Roche radius      | 0.379         | 0.380 (textbook)   |
-| Earth periastron from Kepler solver   | 0.983 AU      | 0.983              |
-| Earth speed at periastron             | 6.389 AU/yr   | 6.39               |
-| Alpha Cen AB orbital period (a=23.4)  | 79.9 yr       | 79.9               |
-| Alpha Cen triple (Mardling-Aarseth)   | stable        | stable             |
-| Earth in N-body integrator after 1 yr | <2e-5 AU drift| (machine prec.)    |
+| Test                                  | Value          | Reference        |
+|---------------------------------------|----------------|------------------|
+| Sun runaway-greenhouse limit          | 0.951 AU       | 0.95 (Kopparapu) |
+| Sun max-greenhouse limit              | 1.677 AU       | 1.67 (Kopparapu) |
+| Equal-mass Eggleton Roche radius      | 0.379          | 0.380 (textbook) |
+| Earth periastron from Kepler solver   | 0.983 AU       | 0.983            |
+| Earth speed at periastron             | 6.389 AU/yr    | 6.39             |
+| Alpha Cen AB orbital period (a=23.4)  | 79.9 yr        | 79.9             |
+| Alpha Cen triple (Mardling-Aarseth)   | stable         | stable           |
+| Earth in N-body integrator after 1 yr | <2e-5 AU drift | (machine prec.)  |
 
 ## The ten example systems
 
 The demo (`python3 demo.py`) builds and renders ten systems covering the
 main physical regimes:
 
-| #  | System                          | Type           | Highlights                              |
-|----|---------------------------------|----------------|------------------------------------------|
-| 01 | Sun + Earth                     | single         | Real Earth e=0.0167; 5 planets fit in HZ |
-| 02 | Alpha Centauri AB               | close binary   | 3+3 S-type planets, e_max ~0.13         |
-| 03 | Kepler-16                       | tight circumbinary | Real planet just at the PHZ edge   |
-| 04 | Kepler-47                       | multi-planet circumbinary | Real Kepler-47 c sits in PHZ |
-| 05 | Alpha Cen + Proxima             | hierarchical triple | Multi-scale view: 30 AU + 18000 AU |
-| 06 | G+G+M wide hierarchy            | hierarchical triple | Synthetic stable triple           |
-| 07 | Star-hopper (Moeckel-Veras 2012)| wide binary    | e=0.70 planet bouncing near L1          |
-| 08 | Trojan / co-orbital pair        | single         | Two planets share an orbit, 60 deg apart|
-| 09 | Wide hierarchy + M-dwarf HZ     | hierarchical triple | Earth around the outer M-dwarf    |
-| 10 | K-dwarf with polar HZ planet    | single         | Inclined orbit; HAT-P-7-like geometry   |
+| #  | System                           | Type                      | Highlights                               |
+|----|----------------------------------|---------------------------|------------------------------------------|
+| 01 | Sun + Earth                      | single                    | Real Earth e=0.0167; 5 planets fit in HZ |
+| 02 | Alpha Centauri AB                | close binary              | 3+3 S-type planets, e_max ~0.13          |
+| 03 | Kepler-16                        | tight circumbinary        | Real planet just at the PHZ edge         |
+| 04 | Kepler-47                        | multi-planet circumbinary | Real Kepler-47 c sits in PHZ             |
+| 05 | Alpha Cen + Proxima              | hierarchical triple       | Multi-scale view: 30 AU + 18000 AU       |
+| 06 | G+G+M wide hierarchy             | hierarchical triple       | Synthetic stable triple                  |
+| 07 | Star-hopper (Moeckel-Veras 2012) | wide binary               | e=0.70 planet bouncing near L1           |
+| 08 | Trojan / co-orbital pair         | single                    | Two planets share an orbit, 60 deg apart |
+| 09 | Wide hierarchy + M-dwarf HZ      | hierarchical triple       | Earth around the outer M-dwarf           |
+| 10 | K-dwarf with polar HZ planet     | single                    | Inclined orbit; HAT-P-7-like geometry    |
 
 Each system produces:
+
 - `figures/<NN>_<name>.png` -- 4-panel diagnostic figure with top-down
   view + PHZ + side view + eccentricity envelope (plus a wide-view
   panel for hierarchical systems).
@@ -123,7 +124,7 @@ Each system produces:
   numerically evaluated Laplace coefficients b_{3/2}^(j) (alpha)
 * N-body planet acceleration:
   d^2 r_i / dt^2 = -G sum_s M_s (r_i - r_s(t)) / |r_i - r_s|^3
-                    - G sum_{j != i} m_j (r_i - r_j) / |r_i - r_j|^3
+  - G sum_{j != i} m_j (r_i - r_j) / |r_i - r_j|^3
   with stars on analytical Kepler orbits and planets integrated with a
   leapfrog symplectic scheme (adaptive sub-stepping per planet period).
 

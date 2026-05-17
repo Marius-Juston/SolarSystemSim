@@ -25,15 +25,14 @@ Mardling-Aarseth and Holman-Wiegert before being returned.
 """
 
 from __future__ import annotations
+
 import math
-import warnings
+
 import numpy as np
 
-from goldilocks.stellar  import Star, T_EFF_SUN_K
-from goldilocks.system   import StarSystem
-from goldilocks.planets  import (Planet, earth_analog, super_earth, mini_earth,
-                       mars_analog, venus_analog)
-from goldilocks import stability as stab
+from goldilocks.planets import (Planet)
+from goldilocks.stellar import Star
+from goldilocks.system import StarSystem
 
 
 # ---------------------------------------------------------------------
@@ -56,11 +55,11 @@ def _random_binary_separation(rng: np.random.Generator,
     or 'any'.
     """
     if kind == "tight":
-        P_yr = 10 ** rng.uniform(-2, 0.5)         # 4 days to 3 yr
+        P_yr = 10 ** rng.uniform(-2, 0.5)  # 4 days to 3 yr
     elif kind == "close":
-        P_yr = 10 ** rng.uniform(0.5, 2)          # 3 yr to 100 yr
+        P_yr = 10 ** rng.uniform(0.5, 2)  # 3 yr to 100 yr
     elif kind == "wide":
-        P_yr = 10 ** rng.uniform(2.5, 5)          # 300 yr to 100,000 yr
+        P_yr = 10 ** rng.uniform(2.5, 5)  # 300 yr to 100,000 yr
     else:
         P_yr = 10 ** rng.normal(2.5, 1.4)
         P_yr = max(0.01, min(1e5, P_yr))
@@ -77,8 +76,8 @@ def _random_binary_eccentricity(rng: np.random.Generator,
        intermediate: e roughly thermal (favouring 0.3-0.6)
        very long: e can be near 1
     """
-    P_yr = math.sqrt(a_au**3 / 1.5)
-    if P_yr < 0.033:        # 12 days
+    P_yr = math.sqrt(a_au ** 3 / 1.5)
+    if P_yr < 0.033:  # 12 days
         return float(rng.uniform(0.0, 0.05))
     if P_yr < 10.0:
         return float(rng.uniform(0.05, 0.4))
@@ -96,26 +95,26 @@ def random_binary(rng: np.random.Generator,
                   ) -> StarSystem:
     """Build a random binary drawn from the Raghavan 2010 distributions."""
     m1 = _random_mass(rng, 0.4, 1.3)
-    q  = float(rng.uniform(0.3, 1.0))     # peaked-like distribution
+    q = float(rng.uniform(0.3, 1.0))  # peaked-like distribution
     m2 = m1 * q
-    a  = _random_binary_separation(rng, kind=kind)
-    e  = _random_binary_eccentricity(rng, a)
-    A = Star("Primary",   mass=m1)
+    a = _random_binary_separation(rng, kind=kind)
+    e = _random_binary_eccentricity(rng, a)
+    A = Star("Primary", mass=m1)
     B = Star("Secondary", mass=m2)
     return StarSystem.binary(name, A, B, separation_au=a,
-                              eccentricity=e, quiet=True)
+                             eccentricity=e, quiet=True)
 
 
 # ---------------------------------------------------------------------
 # 2.  Star-hopper candidate
 # ---------------------------------------------------------------------
 def star_hopper_binary(name: str = "Star-hopper binary",
-                        a_bin: float = 40.0,
-                        e_bin: float = 0.0,
-                        m1: float = 1.0, m2: float = 0.3,
-                        planet_a: float = 14.0,
-                        planet_e: float = 0.70
-                        ) -> StarSystem:
+                       a_bin: float = 40.0,
+                       e_bin: float = 0.0,
+                       m1: float = 1.0, m2: float = 0.3,
+                       planet_a: float = 14.0,
+                       planet_e: float = 0.70
+                       ) -> StarSystem:
     """Wide binary with a planet on a high-eccentricity orbit whose
     apoastron reaches the L1 Lagrange point of the binary.
 
@@ -131,14 +130,14 @@ def star_hopper_binary(name: str = "Star-hopper binary",
     the inner Hill region of star A.
 
     Inspired by Moeckel & Veras 2012 (MNRAS 422, 831)."""
-    A = Star("Sun-like",  mass=m1, luminosity=m1**3.5, teff=5800.0)
-    B = Star("M-dwarf",   mass=m2, luminosity=m2**3.0, teff=3500.0)
+    A = Star("Sun-like", mass=m1, luminosity=m1 ** 3.5, teff=5800.0)
+    B = Star("M-dwarf", mass=m2, luminosity=m2 ** 3.0, teff=3500.0)
     # Set the binary's omega to pi so star B sits at -x at t=0; the
     # planet's default omega matches the binary, so its apoastron is
     # along -x (toward the M-dwarf), giving real star-hopping geometry.
     sys = StarSystem.binary(name, A, B, separation_au=a_bin,
-                             eccentricity=e_bin, omega=math.pi,
-                             quiet=True)
+                            eccentricity=e_bin, omega=math.pi,
+                            quiet=True)
     planet = Planet(
         name="Bouncer", mass_me=15.0, radius_re=4.0,
         semi_major_axis_au=planet_a, eccentricity=planet_e,
@@ -155,9 +154,9 @@ def star_hopper_binary(name: str = "Star-hopper binary",
 # 3.  Trojan / co-orbital
 # ---------------------------------------------------------------------
 def trojan_system(name: str = "Trojan companion",
-                   m_star: float = 1.0,
-                   a_planet: float = 1.0
-                   ) -> StarSystem:
+                  m_star: float = 1.0,
+                  a_planet: float = 1.0
+                  ) -> StarSystem:
     """A single Sun-like star with two co-orbital planets at the same
     SMA, the secondary sitting at the L4 Lagrange point of the
     primary (60 degrees ahead).
@@ -165,19 +164,19 @@ def trojan_system(name: str = "Trojan companion",
     Trojan configurations are observed in the Solar System (Jupiter's
     Trojans, Mars' Trojans, Neptune's Trojans, and Earth's 2010 TK7).
     """
-    star = Star("Host", mass=m_star, luminosity=m_star**3.5, teff=5800.0,
-                radius=m_star**0.7)
+    star = Star("Host", mass=m_star, luminosity=m_star ** 3.5, teff=5800.0,
+                radius=m_star ** 0.7)
     p1 = Planet(name="Earth-A", mass_me=1.0,
-                 semi_major_axis_au=a_planet, eccentricity=0.0167,
-                 host_star_index=0,
-                 description="L3-mate of the L4 Trojan", real_planet=False)
+                semi_major_axis_au=a_planet, eccentricity=0.0167,
+                host_star_index=0,
+                description="L3-mate of the L4 Trojan", real_planet=False)
     # Place the Trojan at 60 deg ahead (mean anomaly = 60 deg) by storing
     # in the description; the static plotter renders the orbital ellipse.
     p2 = Planet(name="Earth-Trojan", mass_me=0.5,
-                 semi_major_axis_au=a_planet, eccentricity=0.02,
-                 host_star_index=0,
-                 description="At Earth-A's L4 Lagrange point (60 deg lead)",
-                 real_planet=False)
+                semi_major_axis_au=a_planet, eccentricity=0.02,
+                host_star_index=0,
+                description="At Earth-A's L4 Lagrange point (60 deg lead)",
+                real_planet=False)
     return StarSystem.single(name, star, planets=[p1, p2])
 
 
@@ -188,7 +187,7 @@ def tight_circumbinary_terrestrial(
         name: str = "Tight circumbinary system",
         m1: float = 0.9, m2: float = 0.6,
         a_bin: float = 0.15, e_bin: float = 0.1,
-        ) -> StarSystem:
+) -> StarSystem:
     """A close binary like Kepler-35 / -47 with a small rocky planet
     set in the circumbinary HZ.
 
@@ -196,13 +195,13 @@ def tight_circumbinary_terrestrial(
     Here we put an Earth-mass planet just outside the stability limit
     and inside the HZ.
     """
-    A = Star("HD-x A", mass=m1, luminosity=m1**3.5, teff=5500.0)
-    B = Star("HD-x B", mass=m2, luminosity=m2**3.5, teff=4400.0)
+    A = Star("HD-x A", mass=m1, luminosity=m1 ** 3.5, teff=5500.0)
+    B = Star("HD-x B", mass=m2, luminosity=m2 ** 3.5, teff=4400.0)
     sys = StarSystem.binary(name, A, B, separation_au=a_bin,
-                             eccentricity=e_bin, quiet=True)
+                            eccentricity=e_bin, quiet=True)
     # Place a rocky planet in the circumbinary HZ
     L_tot = sys.total_luminosity()
-    a_hz = math.sqrt(L_tot / 0.95)   # ~runaway-GH distance
+    a_hz = math.sqrt(L_tot / 0.95)  # ~runaway-GH distance
     planet = Planet(
         name="Tatoo", mass_me=1.0, radius_re=1.0,
         semi_major_axis_au=a_hz, eccentricity=0.03,
@@ -219,18 +218,18 @@ def tight_circumbinary_terrestrial(
 def wide_hierarchical_triple(
         name: str = "Wide hierarchy",
         rng: np.random.Generator = None,
-        ) -> StarSystem:
+) -> StarSystem:
     """Close G+K binary with a wide M-dwarf companion at ~50-200 AU,
     Earth-analog around the M-dwarf."""
     if rng is None:
         rng = np.random.default_rng(seed=1)
     m_in_a = float(rng.uniform(0.9, 1.2))
     m_in_b = float(rng.uniform(0.6, 0.9))
-    m_out  = float(rng.uniform(0.2, 0.45))
-    a_in   = float(rng.uniform(0.2, 1.0))
-    e_in   = float(rng.uniform(0.0, 0.3))
-    a_out  = float(rng.uniform(50.0, 200.0))
-    e_out  = float(rng.uniform(0.1, 0.4))
+    m_out = float(rng.uniform(0.2, 0.45))
+    a_in = float(rng.uniform(0.2, 1.0))
+    e_in = float(rng.uniform(0.0, 0.3))
+    a_out = float(rng.uniform(50.0, 200.0))
+    e_out = float(rng.uniform(0.1, 0.4))
     A = Star("Inner-A", mass=m_in_a)
     B = Star("Inner-B", mass=m_in_b)
     C = Star("Outer-M", mass=m_out)
@@ -264,10 +263,10 @@ def polar_planet_system(name: str = "Polar planet") -> StarSystem:
                 radius=0.78)
     sys = StarSystem.single(name, star, planets=[
         Planet(name="Polaris-b", mass_me=1.0, radius_re=1.0,
-                semi_major_axis_au=0.62, eccentricity=0.05,
-                host_star_index=0,
-                description="i = 75 deg, polar orbit",
-                real_planet=False),
+               semi_major_axis_au=0.62, eccentricity=0.05,
+               host_star_index=0,
+               description="i = 75 deg, polar orbit",
+               real_planet=False),
     ])
     return sys
 
@@ -284,9 +283,9 @@ def build_interesting_systems(rng: np.random.Generator = None
     out = []
     # Star-hopper
     sh = star_hopper_binary(name="Star-hopper (Moeckel-Veras 2012)",
-                             a_bin=250.0, e_bin=0.0,
-                             m1=1.0, m2=0.3,
-                             planet_a=50.0, planet_e=0.85)
+                            a_bin=250.0, e_bin=0.0,
+                            m1=1.0, m2=0.3,
+                            planet_a=50.0, planet_e=0.85)
     out.append(("07_star_hopper", sh, 300.0, 1.0))
     # Trojan
     tr = trojan_system(name="Trojan co-orbital")
@@ -298,13 +297,13 @@ def build_interesting_systems(rng: np.random.Generator = None
     out.append(("09_tight_ptype", tc, 1.6, 8.0))
     # Wide hierarchical
     wh = wide_hierarchical_triple(name="Close binary + wide M-dwarf",
-                                    rng=rng)
+                                  rng=rng)
     out.append(("10_wide_hierarchy", wh, 12.0, 0.05))
     # Polar planet
     pp = polar_planet_system(name="K-dwarf with polar HZ planet")
     out.append(("11_polar_planet", pp, 1.3, 1.0))
     # Random Raghavan binary
     rb = random_binary(rng, kind="close",
-                        name="Random Raghavan-distribution binary")
+                       name="Random Raghavan-distribution binary")
     out.append(("12_random_binary", rb, None, 1.0))
     return out

@@ -27,12 +27,13 @@ gives P = 1 yr).
 """
 
 from __future__ import annotations
+
 import math
-from typing import List, Tuple, Iterable
+from typing import Tuple
+
 import numpy as np
 
-
-G_AU3_MSUN_YR2 = 4.0 * math.pi * math.pi          # AU^3 / (Msun * yr^2)
+G_AU3_MSUN_YR2 = 4.0 * math.pi * math.pi  # AU^3 / (Msun * yr^2)
 
 
 # ----------------------------------------------------------------------
@@ -51,8 +52,8 @@ def solve_kepler(M: float, e: float, tol: float = 1e-12,
     # Danby's starting guess.
     E = M + 0.85 * e * math.copysign(1.0, math.sin(M))
     for _ in range(max_iter):
-        f   = E - e * math.sin(E) - M
-        fp  = 1.0 - e * math.cos(E)
+        f = E - e * math.sin(E) - M
+        fp = 1.0 - e * math.cos(E)
         fpp = e * math.sin(E)
         # Halley step
         delta = -f / (fp - 0.5 * f * fpp / fp)
@@ -70,7 +71,7 @@ def kepler_two_body(m1: float, m2: float,
                     omega: float = 0.0,
                     t_peri: float = 0.0
                     ) -> Tuple[np.ndarray, np.ndarray,
-                               np.ndarray, np.ndarray]:
+np.ndarray, np.ndarray]:
     """Closed-form positions and velocities of two bodies at time t.
 
     Parameters
@@ -91,30 +92,30 @@ def kepler_two_body(m1: float, m2: float,
     if a <= 0 or e < 0 or e >= 1.0:
         raise ValueError("Need a > 0 and 0 <= e < 1 for bound orbit.")
     M_total = m1 + m2
-    n = math.sqrt(G_AU3_MSUN_YR2 * M_total / a**3)        # rad / yr
+    n = math.sqrt(G_AU3_MSUN_YR2 * M_total / a ** 3)  # rad / yr
     M = n * (t - t_peri)
     E = solve_kepler(M, e)
     cosE, sinE = math.cos(E), math.sin(E)
     # Position in the orbital plane (pericentre on +x axis before rotation by omega)
     x_p = a * (cosE - e)
-    y_p = a * math.sqrt(1.0 - e*e) * sinE
+    y_p = a * math.sqrt(1.0 - e * e) * sinE
     # Velocity in the orbital plane (analytic derivative of Kepler eq.)
     factor = a * n / (1.0 - e * cosE)
     vx_p = -factor * sinE
-    vy_p =  factor * math.sqrt(1.0 - e*e) * cosE
+    vy_p = factor * math.sqrt(1.0 - e * e) * cosE
     # Rotate by omega.
     co, so = math.cos(omega), math.sin(omega)
-    r_rel = np.array([co*x_p - so*y_p,  so*x_p + co*y_p, 0.0])
-    v_rel = np.array([co*vx_p - so*vy_p, so*vx_p + co*vy_p, 0.0])
+    r_rel = np.array([co * x_p - so * y_p, so * x_p + co * y_p, 0.0])
+    v_rel = np.array([co * vx_p - so * vy_p, so * vx_p + co * vy_p, 0.0])
     # Split into barycentric coordinates.
     f1 = -m2 / M_total
-    f2 =  m1 / M_total
+    f2 = m1 / M_total
     return f1 * r_rel, f2 * r_rel, f1 * v_rel, f2 * v_rel
 
 
 def orbital_period(m1: float, m2: float, a: float) -> float:
     """Keplerian period (yr) for SMA a (AU) and total mass m1+m2 (Msun)."""
-    return 2.0 * math.pi * math.sqrt(a**3 / (G_AU3_MSUN_YR2 * (m1 + m2)))
+    return 2.0 * math.pi * math.sqrt(a ** 3 / (G_AU3_MSUN_YR2 * (m1 + m2)))
 
 
 # ----------------------------------------------------------------------
@@ -130,15 +131,15 @@ def orbital_elements_to_state(m_in: float, m_orbiting: float,
     M = mean_anomaly
     E = solve_kepler(M, e)
     cosE, sinE = math.cos(E), math.sin(E)
-    n = math.sqrt(G_AU3_MSUN_YR2 * (m_in + m_orbiting) / a**3)
+    n = math.sqrt(G_AU3_MSUN_YR2 * (m_in + m_orbiting) / a ** 3)
     x_p = a * (cosE - e)
-    y_p = a * math.sqrt(1.0 - e*e) * sinE
+    y_p = a * math.sqrt(1.0 - e * e) * sinE
     factor = a * n / (1.0 - e * cosE)
     vx_p = -factor * sinE
-    vy_p =  factor * math.sqrt(1.0 - e*e) * cosE
+    vy_p = factor * math.sqrt(1.0 - e * e) * cosE
     co, so = math.cos(omega), math.sin(omega)
-    r = np.array([co*x_p - so*y_p, so*x_p + co*y_p, 0.0])
-    v = np.array([co*vx_p - so*vy_p, so*vx_p + co*vy_p, 0.0])
+    r = np.array([co * x_p - so * y_p, so * x_p + co * y_p, 0.0])
+    v = np.array([co * vx_p - so * vy_p, so * vx_p + co * vy_p, 0.0])
     return r, v
 
 
@@ -155,7 +156,7 @@ def nbody_step(positions: np.ndarray, velocities: np.ndarray,
     """
     a = _accelerations(positions, masses)
     velocities += 0.5 * dt * a
-    positions  += dt * velocities
+    positions += dt * velocities
     a = _accelerations(positions, masses)
     velocities += 0.5 * dt * a
 
@@ -187,14 +188,14 @@ def nbody_orbit(positions0: np.ndarray, velocities0: np.ndarray,
     snapshots  : ndarray, shape (n_samples, N, 3)
     """
     n = positions0.shape[0]
-    positions  = positions0.copy()
+    positions = positions0.copy()
     velocities = velocities0.copy()
     # Adaptive dt selection: 1/200 of the shortest pair orbital period.
     pmin = float("inf")
     for i in range(n):
-        for j in range(i+1, n):
+        for j in range(i + 1, n):
             r = np.linalg.norm(positions[i] - positions[j])
-            p = 2.0 * math.pi * math.sqrt(r**3 /
+            p = 2.0 * math.pi * math.sqrt(r ** 3 /
                                           (G_AU3_MSUN_YR2 *
                                            (masses[i] + masses[j])))
             pmin = min(pmin, p)

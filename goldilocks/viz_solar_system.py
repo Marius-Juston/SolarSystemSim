@@ -21,20 +21,19 @@ visualization.py.
 """
 
 from __future__ import annotations
+
 import math
 from typing import Optional
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.animation import FuncAnimation, FFMpegWriter
 
-from goldilocks.system import StarSystem
-from goldilocks.visualization import _star_color, _star_size
-from goldilocks import habitable_zone as hz
-from goldilocks.planets import is_gas_giant, bulk_density_gcc
 from goldilocks.moons import (planetary_roche_limit_au, planet_hill_radius_au,
                               critical_moon_fraction)
-
+from goldilocks.planets import bulk_density_gcc
+from goldilocks.system import StarSystem
+from goldilocks.visualization import _star_color, _star_size
 
 BG = "#15161c"
 PANEL = "#0c0d11"
@@ -175,7 +174,7 @@ def plot_all_planet_zooms(sys: StarSystem, save_path: Optional[str] = None):
 
         # planet disc + Roche (red) and prograde/retrograde Hill rings
         ax.add_patch(plt.Circle((0, 0), roche, color="#552222",
-                                 alpha=0.5, zorder=1))
+                                alpha=0.5, zorder=1))
         ax.scatter([0], [0], s=420, color=sky, edgecolors="white",
                    linewidths=1.4, zorder=6)
         for frac, sty, lab in (
@@ -202,7 +201,8 @@ def plot_all_planet_zooms(sys: StarSystem, save_path: Optional[str] = None):
         ax.set_xlim(-lim, lim)
         ax.set_ylim(-lim, lim)
         ax.set_aspect("equal", "box")
-        ax.set_xticks([]); ax.set_yticks([])
+        ax.set_xticks([]);
+        ax.set_yticks([])
         ax.set_title(p.name, color="white", fontsize=10)
         txt = (p.habitability.summary if p.habitability else "")
         ax.text(0.015, 0.985, txt, transform=ax.transAxes,
@@ -310,9 +310,9 @@ def animate_solar_system(result: dict, sys: StarSystem,
     title = ax.set_title("", color="white", fontsize=11)
 
     star_sc = ax.scatter([], [], s=140, c="#FFE08A", edgecolors="white",
-                          zorder=10)
+                         zorder=10)
     p_sc = ax.scatter([], [], s=30, c="#56C7FF", edgecolors="white",
-                       linewidths=0.5, zorder=8)
+                      linewidths=0.5, zorder=8)
     trails = [ax.plot([], [], lw=0.6, alpha=0.7)[0] for _ in planet_rows]
 
     def update(fi):

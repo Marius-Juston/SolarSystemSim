@@ -36,13 +36,13 @@ hopelessly wrong.
 """
 
 from __future__ import annotations
+
 import math
-from typing import List, Sequence, Tuple, Callable, Optional
+from typing import List, Tuple
 
 import numpy as np
 
-from goldilocks.kepler import (G_AU3_MSUN_YR2, kepler_two_body, orbital_period,
-                    solve_kepler)
+from goldilocks.kepler import (G_AU3_MSUN_YR2, kepler_two_body, solve_kepler)
 
 
 # ---------------------------------------------------------------------
@@ -84,7 +84,7 @@ class StarTrajectory:
                 omega=omega_o, t_peri=0.0)
             pos[i] += r_in
             pos[j] += r_in
-            pos[k]  = r_out
+            pos[k] = r_out
         return pos
 
 
@@ -124,7 +124,7 @@ def _all_planet_accels(planet_pos: np.ndarray,
     accs = np.zeros_like(planet_pos)
     # Stellar contribution -- vectorised
     for k in range(star_pos.shape[0]):
-        dr = star_pos[k][None, :] - planet_pos        # (n_p, 3)
+        dr = star_pos[k][None, :] - planet_pos  # (n_p, 3)
         r2 = np.einsum("ij,ij->i", dr, dr)
         inv_r3 = np.where(r2 > 1e-14, r2 ** -1.5, 0.0)
         accs += G_AU3_MSUN_YR2 * star_masses[k] * dr * inv_r3[:, None]
@@ -147,9 +147,9 @@ def _all_planet_accels(planet_pos: np.ndarray,
 # Integrator
 # ---------------------------------------------------------------------
 def integrate_planets(traj: StarTrajectory,
-                      planet_pos0: np.ndarray,        # (N_p, 3)
-                      planet_vel0: np.ndarray,        # (N_p, 3)
-                      planet_masses_me: np.ndarray,   # (N_p,)
+                      planet_pos0: np.ndarray,  # (N_p, 3)
+                      planet_vel0: np.ndarray,  # (N_p, 3)
+                      planet_masses_me: np.ndarray,  # (N_p,)
                       times: np.ndarray,
                       sub_steps_per_sample: int = 50
                       ) -> Tuple[np.ndarray, np.ndarray]:
@@ -170,22 +170,22 @@ def integrate_planets(traj: StarTrajectory,
     n_p = planet_pos0.shape[0]
     n_s = traj.n
     planet_hist = np.zeros((n_t, n_p, 3))
-    star_hist   = np.zeros((n_t, n_s, 3))
+    star_hist = np.zeros((n_t, n_s, 3))
 
     pos = planet_pos0.copy()
     vel = planet_vel0.copy()
 
     # Always record t=0
     planet_hist[0] = pos
-    star_hist[0]   = traj.positions(times[0])
+    star_hist[0] = traj.positions(times[0])
 
     for ti in range(1, n_t):
         t_start = times[ti - 1]
-        t_end   = times[ti]
+        t_end = times[ti]
         dt_total = t_end - t_start
         if dt_total <= 0:
             planet_hist[ti] = pos
-            star_hist[ti]   = traj.positions(t_end)
+            star_hist[ti] = traj.positions(t_end)
             continue
         n_sub = max(1, sub_steps_per_sample)
         dt = dt_total / n_sub
@@ -205,7 +205,7 @@ def integrate_planets(traj: StarTrajectory,
                                     star_c, traj.masses)
             vel += 0.5 * dt * a2
         planet_hist[ti] = pos
-        star_hist[ti]   = traj.positions(t_end)
+        star_hist[ti] = traj.positions(t_end)
     return planet_hist, star_hist
 
 
@@ -226,22 +226,22 @@ def planet_initial_state(host_pos: np.ndarray,
     cosE, sinE = math.cos(E), math.sin(E)
     # Position in orbital plane (peri on +x axis)
     x_op = a_au * (cosE - e)
-    y_op = a_au * math.sqrt(1.0 - e*e) * sinE
+    y_op = a_au * math.sqrt(1.0 - e * e) * sinE
     # Velocity in orbital plane
-    n_mean = math.sqrt(G_AU3_MSUN_YR2 * m_host_msun / a_au**3)
+    n_mean = math.sqrt(G_AU3_MSUN_YR2 * m_host_msun / a_au ** 3)
     factor = a_au * n_mean / (1.0 - e * cosE)
     vx_op = -factor * sinE
-    vy_op = factor * math.sqrt(1.0 - e*e) * cosE
+    vy_op = factor * math.sqrt(1.0 - e * e) * cosE
     # Build rotation matrix R = R_z(Ω) R_x(i) R_z(ω)
     co_w, so_w = math.cos(omega), math.sin(omega)
     co_i, si_i = math.cos(inclination_rad), math.sin(inclination_rad)
     co_O, so_O = math.cos(lon_ascending_node_rad), math.sin(lon_ascending_node_rad)
     # Position rotation
-    px = (co_O*co_w - so_O*so_w*co_i) * x_op + (-co_O*so_w - so_O*co_w*co_i) * y_op
-    py = (so_O*co_w + co_O*so_w*co_i) * x_op + (-so_O*so_w + co_O*co_w*co_i) * y_op
+    px = (co_O * co_w - so_O * so_w * co_i) * x_op + (-co_O * so_w - so_O * co_w * co_i) * y_op
+    py = (so_O * co_w + co_O * so_w * co_i) * x_op + (-so_O * so_w + co_O * co_w * co_i) * y_op
     pz = (so_w * si_i) * x_op + (co_w * si_i) * y_op
-    vx = (co_O*co_w - so_O*so_w*co_i) * vx_op + (-co_O*so_w - so_O*co_w*co_i) * vy_op
-    vy = (so_O*co_w + co_O*so_w*co_i) * vx_op + (-so_O*so_w + co_O*co_w*co_i) * vy_op
+    vx = (co_O * co_w - so_O * so_w * co_i) * vx_op + (-co_O * so_w - so_O * co_w * co_i) * vy_op
+    vy = (so_O * co_w + co_O * so_w * co_i) * vx_op + (-so_O * so_w + co_O * co_w * co_i) * vy_op
     vz = (so_w * si_i) * vx_op + (co_w * si_i) * vy_op
     r_rel = np.array([px, py, pz])
     v_rel = np.array([vx, vy, vz])

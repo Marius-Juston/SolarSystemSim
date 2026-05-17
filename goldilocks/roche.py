@@ -30,6 +30,7 @@ Eggleton P.P. 1983, ApJ 268, 368.
 """
 
 from __future__ import annotations
+
 import math
 
 

@@ -30,16 +30,15 @@ Orosz J.A. et al., 2012, ApJ 758, 87        (Kepler-38 b)
 """
 
 from __future__ import annotations
-import math
+
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any
 
-
 # Conversion factors -----------------------------------------------------
-M_EARTH_OVER_M_SUN  = 3.0034893e-6
-M_JUP_OVER_M_EARTH  = 317.83
-R_EARTH_KM          = 6378.137
-EARTH_BULK_DENSITY_GCC = 5.514          # g/cm^3 (mean Earth density)
+M_EARTH_OVER_M_SUN = 3.0034893e-6
+M_JUP_OVER_M_EARTH = 317.83
+R_EARTH_KM = 6378.137
+EARTH_BULK_DENSITY_GCC = 5.514  # g/cm^3 (mean Earth density)
 
 
 # -----------------------------------------------------------------------
@@ -67,7 +66,7 @@ def bulk_density_gcc(mass_me: float, radius_re: float) -> float:
 
 # Giant if heavier than ~0.1 M_Jup or puffier than ~4 R_earth.  Below this
 # the Otegi/Chen-Kipping relation is in the rocky/sub-Neptune regime.
-GAS_GIANT_MASS_ME   = 30.0
+GAS_GIANT_MASS_ME = 30.0
 GAS_GIANT_RADIUS_RE = 4.0
 
 
@@ -83,7 +82,7 @@ def is_gas_giant(planet: "Planet") -> bool:
 @dataclass
 class Planet:
     name: str
-    mass_me: float                  # Earth masses
+    mass_me: float  # Earth masses
     radius_re: Optional[float] = None  # Earth radii
     # Orbital elements relative to host (S-type) or to barycentre (P-type)
     semi_major_axis_au: Optional[float] = None
@@ -223,18 +222,18 @@ def kepler47_c() -> Planet:
 # Convenience: pick a planet template by name
 # -----------------------------------------------------------------------
 CATALOG: Dict[str, callable] = {
-    "earth"       : earth_analog,
-    "venus"       : venus_analog,
-    "mars"        : mars_analog,
-    "super-earth" : super_earth,
-    "mini-earth"  : mini_earth,
-    "kepler-16 b" : kepler16_b,
-    "kepler-34 b" : kepler34_b,
-    "kepler-35 b" : kepler35_b,
-    "kepler-38 b" : kepler38_b,
-    "kepler-47 b" : kepler47_b,
-    "kepler-47 c" : kepler47_c,
-    "kepler-47 d" : kepler47_d,
+    "earth": earth_analog,
+    "venus": venus_analog,
+    "mars": mars_analog,
+    "super-earth": super_earth,
+    "mini-earth": mini_earth,
+    "kepler-16 b": kepler16_b,
+    "kepler-34 b": kepler34_b,
+    "kepler-35 b": kepler35_b,
+    "kepler-38 b": kepler38_b,
+    "kepler-47 b": kepler47_b,
+    "kepler-47 c": kepler47_c,
+    "kepler-47 d": kepler47_d,
 }
 
 

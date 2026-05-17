@@ -15,7 +15,9 @@ Output: figures/  and  animations/  (repo-relative; no hardcoded paths).
 import os
 import sys as _sys
 import time
+
 import matplotlib
+
 matplotlib.use("Agg")
 
 import numpy as np
@@ -35,9 +37,10 @@ os.makedirs(OUT_ANI, exist_ok=True)
 
 def main():
     seed = int(_sys.argv[1]) if len(_sys.argv) > 1 else 2026
-    
+
     for n_stars in range(1, 4):
         gen_system(seed * n_stars, n_stars)
+
 
 def gen_system(seed, n):
     rng = np.random.default_rng(seed)
@@ -66,14 +69,14 @@ def gen_system(seed, n):
         rng=np.random.default_rng(seed + 1))
     rep = result["report"]
     print(f"  verdict: {'STABLE' if rep['stable'] else 'UNSTABLE'}  "
-        f"({rep['n_bodies']} bodies, horizon {rep['horizon_yr']:.0f} yr, "
-        f"{rep['sub_steps']} sub-steps/sample) [{time.time() - t1:.1f}s]")
+          f"({rep['n_bodies']} bodies, horizon {rep['horizon_yr']:.0f} yr, "
+          f"{rep['sub_steps']} sub-steps/sample) [{time.time() - t1:.1f}s]")
     for b in rep["bodies"]:
         if b["kind"] == "planet" or not b["stable"]:
             flag = "" if b["stable"] else "  <-- FLAGGED"
             print(f"    {b['label']:<16s} {b['kind']:<7s} "
-                f"a~{b['a_au']:.3g} AU  e~{b['e']:.3f}  "
-                f"drift {b['rel_drift']*100:.2f}%{flag}")
+                  f"a~{b['a_au']:.3g} AU  e~{b['e']:.3f}  "
+                  f"drift {b['rel_drift'] * 100:.2f}%{flag}")
 
     plot_longterm_stability(result, system,
                             os.path.join(OUT_FIG, f"{seed}_{n}_stability.png"))
@@ -85,7 +88,7 @@ def gen_system(seed, n):
             result, system,
             os.path.join(OUT_ANI, f"{seed}_{n}_system.mp4"))
         print("  system MP4 done")
-    except Exception as e:                       # ffmpeg missing etc.
+    except Exception as e:  # ffmpeg missing etc.
         print(f"  animation skipped: {e}")
 
     print(f"\nDONE in {time.time() - t0:.1f}s")

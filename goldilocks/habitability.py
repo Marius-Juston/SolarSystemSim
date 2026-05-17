@@ -27,36 +27,35 @@ Grounding references
 """
 
 from __future__ import annotations
+
 import math
-from dataclasses import dataclass, field
-from typing import Optional, List
+from dataclasses import dataclass
 
 import numpy as np
 
+from goldilocks.planets import is_gas_giant
 from goldilocks.stellar import G_SI, M_SUN_KG, AU_M
-from goldilocks.planets import is_gas_giant, M_EARTH_OVER_M_SUN
-
 
 # Physical constants (SI) ------------------------------------------------
-K_B          = 1.380649e-23          # J/K
-M_H          = 1.6735575e-27         # kg (hydrogen atom)
-G_EARTH_SI   = 9.80665               # m/s^2
-M_EARTH_KG   = 5.972168e24
-R_EARTH_M    = 6.378137e6
-V_ESC_EARTH  = 11.186                # km/s
+K_B = 1.380649e-23  # J/K
+M_H = 1.6735575e-27  # kg (hydrogen atom)
+G_EARTH_SI = 9.80665  # m/s^2
+M_EARTH_KG = 5.972168e24
+R_EARTH_M = 6.378137e6
+V_ESC_EARTH = 11.186  # km/s
 SECONDS_PER_HOUR = 3600.0
 SECONDS_PER_YEAR = 3.15576e7
-GYR_S        = 3.15576e16
+GYR_S = 3.15576e16
 
 
 @dataclass
 class HabitabilityProfile:
     # Bulk / gravity
-    surface_gravity_g: float = 1.0           # in Earth g
+    surface_gravity_g: float = 1.0  # in Earth g
     surface_gravity_ms2: float = G_EARTH_SI
     escape_velocity_kms: float = V_ESC_EARTH
     # Radiation / temperature
-    mean_insolation_searth: float = 1.0      # relative to Earth (S0)
+    mean_insolation_searth: float = 1.0  # relative to Earth (S0)
     bond_albedo: float = 0.30
     t_eq_k: float = 255.0
     t_surface_k: float = 288.0
@@ -68,10 +67,10 @@ class HabitabilityProfile:
     day_night_note: str = ""
     # Axial tilt / seasons
     obliquity_deg: float = 23.4
-    seasonality: float = 0.40                # 0..1, ~ sin(obliquity)
+    seasonality: float = 0.40  # 0..1, ~ sin(obliquity)
     chaotic_obliquity: bool = False
     # Magnetosphere
-    magnetic_moment_rel: float = 1.0         # relative to Earth
+    magnetic_moment_rel: float = 1.0  # relative to Earth
     magnetosphere: str = "moderate"
     # Atmosphere
     dominant_gas: str = "N2/O2"
@@ -82,10 +81,10 @@ class HabitabilityProfile:
     sky_description: str = "clear pale-blue Rayleigh sky"
     # Weather
     wind_regime: str = "Earth-like Hadley + mid-latitude jets"
-    storm_index: float = 0.30                # 0..1
+    storm_index: float = 0.30  # 0..1
     # Overall
     in_phz: bool = False
-    biosphere_score: float = 0.0             # 0..1
+    biosphere_score: float = 0.0  # 0..1
     summary: str = ""
 
 
@@ -139,7 +138,7 @@ def _tidal_lock(planet, host_mass_msun: float, w0_rad_s: float,
     M = planet.mass_me * M_EARTH_KG
     Ms = host_mass_msun * M_SUN_KG
     I = 0.33 * M * R * R
-    t_despin = (w0_rad_s * a**6 * I * Q) / (3.0 * G_SI * Ms*Ms * k2 * R**5)
+    t_despin = (w0_rad_s * a ** 6 * I * Q) / (3.0 * G_SI * Ms * Ms * k2 * R ** 5)
     return t_despin < age_gyr * GYR_S
 
 
@@ -157,7 +156,7 @@ def _jeans_parameter(mu: float, T_k: float,
 def _infer_atmosphere(planet, t_eq_k: float, g_si: float):
     """Return (dominant_gas, mu, P_surface_bar, sky_hex, sky_desc)."""
     if is_gas_giant(planet):
-        mu = 2.3                                     # H2/He
+        mu = 2.3  # H2/He
         return ("H2/He (+CH4, NH3)", mu, 1e4,
                 "#D9C7A3", "deep banded H2/He haze, ammonia/methane tinted")
 
@@ -197,9 +196,9 @@ def _infer_atmosphere(planet, t_eq_k: float, g_si: float):
 # Main entry point
 # ---------------------------------------------------------------------
 def profile_for_planet(planet, sys,
-                        rng: np.random.Generator,
-                        in_phz: bool = False,
-                        age_gyr: float = 5.0) -> HabitabilityProfile:
+                       rng: np.random.Generator,
+                       in_phz: bool = False,
+                       age_gyr: float = 5.0) -> HabitabilityProfile:
     M_me, R_re = planet.mass_me, planet.radius_re
     giant = is_gas_giant(planet)
 

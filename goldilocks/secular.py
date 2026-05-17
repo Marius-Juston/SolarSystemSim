@@ -49,10 +49,11 @@ Eggl S., Pilat-Lohinger E., Georgakarakos N., Gyergyovits M., Funk B.
 """
 
 from __future__ import annotations
-import math
-from typing import Sequence, Tuple, Optional
-import numpy as np
 
+import math
+from typing import Sequence
+
+import numpy as np
 
 M_EARTH_OVER_M_SUN = 3.0034893e-6
 
@@ -106,9 +107,9 @@ def laplace_lagrange_matrix(masses_me: Sequence[float],
     A = np.zeros((n, n))
     if n == 0:
         return A
-    G_yr = 4.0 * math.pi * math.pi              # AU^3 Msun^-1 yr^-2
-    n_j  = np.array([math.sqrt(G_yr * m_star_msun / a**3)
-                     for a in semi_major_axes_au])
+    G_yr = 4.0 * math.pi * math.pi  # AU^3 Msun^-1 yr^-2
+    n_j = np.array([math.sqrt(G_yr * m_star_msun / a ** 3)
+                    for a in semi_major_axes_au])
     m_ratio = np.array([m * M_EARTH_OVER_M_SUN / m_star_msun
                         for m in masses_me])
 
@@ -118,7 +119,7 @@ def laplace_lagrange_matrix(masses_me: Sequence[float],
                 continue
             a_j, a_k = semi_major_axes_au[j], semi_major_axes_au[k]
             alpha = min(a_j, a_k) / max(a_j, a_k)
-            abar  = alpha if a_j < a_k else 1.0
+            abar = alpha if a_j < a_k else 1.0
             b1 = laplace_coefficient(1.5, 1, alpha)
             b2 = laplace_coefficient(1.5, 2, alpha)
             prefac = 0.25 * n_j[j] * m_ratio[k] * alpha * abar
@@ -190,7 +191,7 @@ def secular_max_eccentricities(masses_me: Sequence[float],
     if external_forcing is None:
         external_forcing = np.zeros(n)
     init_e = np.asarray(initial_eccentricities, dtype=float)
-    ext    = np.asarray(external_forcing, dtype=float)
+    ext = np.asarray(external_forcing, dtype=float)
 
     # Binary forcing: starting from circular orbit, oscillates between 0 and 2*e_f.
     # If init_e > 0, max is init_e + 2*e_f (worst-case phasing).
