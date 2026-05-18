@@ -42,6 +42,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from goldilocks import backend as B
 from goldilocks.kepler import (G_AU3_MSUN_YR2, kepler_two_body, solve_kepler)
 
 
@@ -141,6 +142,39 @@ def _all_planet_accels(planet_pos: np.ndarray,
                 accs[i] += (G_AU3_MSUN_YR2 * planet_masses_msun[j]
                             * dr / (r2 * math.sqrt(r2)))
     return accs
+
+
+def _all_planet_accels_xp(planet_pos, planet_masses_msun,
+                          star_pos, star_masses):
+    """Vectorised all-pairs acceleration on the active GPU backend.
+
+    Used only when CuPy is the active backend (`backend.ON_GPU`); the
+    NumPy default path above is left untouched so every pinned sanity
+    value is preserved bit-for-bit.
+    """
+    xp = B.xp
+    pp = B.asarray(planet_pos)
+    pm = B.asarray(planet_masses_msun)
+    sp = B.asarray(star_pos)
+    sm = B.asarray(star_masses)
+    # Star -> planet
+    d_s = sp[None, :, :] - pp[:, None, :]              # (n_p, n_s, 3)
+    r2_s = xp.sum(d_s * d_s, axis=-1)
+    inv_s = xp.where(r2_s > 1e-14, r2_s ** -1.5, 0.0)
+    accs = G_AU3_MSUN_YR2 * xp.sum(
+        (sm[None, :] * inv_s)[..., None] * d_s, axis=1)
+    # Planet -> planet
+    if pp.shape[0] > 1:
+        d_p = pp[None, :, :] - pp[:, None, :]          # (n_p, n_p, 3)
+        r2_p = xp.sum(d_p * d_p, axis=-1)
+        inv_p = xp.where(r2_p > 1e-14, r2_p ** -1.5, 0.0)
+        accs += G_AU3_MSUN_YR2 * xp.sum(
+            (pm[None, :] * inv_p)[..., None] * d_p, axis=1)
+    return B.asnumpy(accs)
+
+
+if B.ON_GPU:
+    _all_planet_accels = _all_planet_accels_xp  # noqa: F811
 
 
 # ---------------------------------------------------------------------

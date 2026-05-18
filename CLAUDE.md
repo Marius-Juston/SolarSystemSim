@@ -21,6 +21,31 @@ matplotlib).
   ffmpeg is absent.
 - `main.py` is a stub placeholder — not a real entry point.
 
+### Acceleration / parallelism
+
+The rendering + N-body kernels run through a single backend seam so the same code path works on
+multi-GPU, single-GPU and CPU-only machines:
+
+- `goldilocks/backend.py` — `xp` is NumPy or CuPy. Selected by `GOLDILOCKS_BACKEND=auto|cpu|gpu`
+  (default `auto`: CuPy iff it imports and a CUDA device exists). Optional extras:
+  `uv sync --extra gpu` (CuPy; pick the wheel matching your CUDA — `cupy-cuda12x`/`cupy-cuda11x`),
+  `--extra accel` (numba). The CPU/NumPy path is byte-identical to before, so every pinned sanity
+  value is preserved.
+- `goldilocks/parallel.py` — work distribution + `encode_frames` (frames streamed straight into one
+  `ffmpeg`, no `FuncAnimation`). One worker process per GPU (pinned via `CUDA_VISIBLE_DEVICES`), or
+  a CPU process pool. `GOLDILOCKS_SERIAL=1` forces an in-process serial map (debug);
+  `GOLDILOCKS_MAX_WORKERS=N` caps the CPU pool.
+- `skyview.py` uses a Bruneton-2016-style precomputed optical-depth LUT (`_od_table`, lru-cached per
+  atmosphere) instead of ray-marching every light ray per pixel — same look (LUT-vs-ray-march
+  parity asserted in section 9), much faster on CPU and GPU. Default render resolutions were
+  raised (phases 1920×1080, day-MP4 1280×720).
+- `skyview.render_phases`/`animate_day` fan frames across the pool; `demo.py` fans whole systems
+  across the pool; `animation.py` streams its (stateful-trail) draw loop into `encode_frames`.
+- Two showcase systems in `random_systems.py`: `big_moon_system` (a moon ~8× the apparent size of
+  the real Moon) and `companion_with_moon_system` (a co-orbital giant + its own large moon, both
+  prominent in the observer's sky). Both are wired into `render_skyview.py`; the first is also a
+  `demo.py` entry.
+
 ## Architecture
 
 Single Python package `goldilocks/` (import as `from goldilocks.<module> import ...`). It computes the **Permanently

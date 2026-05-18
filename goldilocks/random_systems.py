@@ -30,7 +30,11 @@ import math
 
 import numpy as np
 
-from goldilocks.planets import (Planet)
+from goldilocks.moons import (Moon, R_EARTH_AU, planetary_roche_limit_au,
+                              critical_moon_fraction,
+                              planet_hill_radius_au)
+from goldilocks.planets import (Planet, earth_analog, bulk_density_gcc,
+                                radius_from_mass_me)
 from goldilocks.stellar import Star
 from goldilocks.system import StarSystem
 
@@ -269,6 +273,101 @@ def polar_planet_system(name: str = "Polar planet") -> StarSystem:
                real_planet=False),
     ])
     return sys
+
+
+# ---------------------------------------------------------------------
+# 7.  Dramatic close moon (Earth-Moon geometry, exaggerated)
+# ---------------------------------------------------------------------
+def _moon_ang_diam_deg(r_body_au: float, dist_au: float) -> float:
+    return 2.0 * math.degrees(math.asin(min(r_body_au / dist_au, 0.999)))
+
+
+def big_moon_system(name: str = "Big-moon world") -> StarSystem:
+    """Sun-like star, an Earth-analog whose single large moon sits so
+    close that it looms ~8x the apparent size of the real Moon.
+
+    The moon clears 1.5x its fluid Roche limit and sits far inside the
+    Domingos+2006 Hill bound, so the configuration is dynamically sound
+    -- it is the *size on the sky* that is exaggerated, not the physics.
+    """
+    sun = Star(name + " Sun", mass=1.0, luminosity=1.0, teff=5772.0,
+               radius=1.0)
+    planet = earth_analog("Hearth", a_au=1.0)
+    r_re, a_moon, rho_m = 0.80, 9.0e-4, 3.3
+    rho_p = bulk_density_gcc(planet.mass_me, planet.radius_re)
+    roche = planetary_roche_limit_au(planet.radius_re, rho_p, rho_m)
+    r_hill = planet_hill_radius_au(planet.mass_me, 1.0, sun.mass)
+    a_crit = critical_moon_fraction(0.0, 0.0, False) * r_hill
+    assert a_moon > 1.5 * roche, (a_moon, roche)
+    assert a_moon < a_crit, (a_moon, a_crit)
+    planet.moons = [Moon("Selene", mass_me=0.06, radius_re=r_re,
+                         a_planet_au=a_moon, eccentricity=0.01,
+                         inclination_deg=1.0, density_gcc=rho_m,
+                         kind="regular")]
+    d = _moon_ang_diam_deg(r_re * R_EARTH_AU, a_moon)
+    print(f"  [big_moon_system] Selene angular diameter ~ {d:.2f} deg "
+          f"(real Moon ~ 0.52 deg); Roche={roche:.2e} a_crit={a_crit:.2e}")
+    return StarSystem.single(name, sun, planets=[planet])
+
+
+# ---------------------------------------------------------------------
+# 8.  Co-orbital giant + its big moon, both prominent in the sky
+# ---------------------------------------------------------------------
+def companion_with_moon_system(
+        name: str = "Co-orbital giant + moon") -> StarSystem:
+    """Sun-like star with a habitable observer planet and a co-orbital
+    (1:1, quasi-satellite) gas giant a few degrees away that carries one
+    large regular moon.
+
+    Two heliocentric planets cannot, by orbital mechanics, appear large
+    in each other's sky unless they share an orbit -- so the giant is a
+    tight co-orbital companion (a known stable family).  At the canonical
+    render the giant subtends ~1 deg (about twice the real Moon) and its
+    moon resolves as a separate disk tracked across the day MP4 and the
+    debug contact sheet.  The moon clears 1.5x the giant's Roche limit
+    and stays well inside the Domingos+2006 Hill bound.
+    """
+    sun = Star(name + " Sun", mass=1.0, luminosity=1.0, teff=5772.0,
+               radius=1.0)
+    observer = earth_analog("Watcher", a_au=1.0)
+
+    # `sky_bodies` advances each sibling by _phase0(name); pick a giant
+    # name whose deterministic phase places it a few degrees from the
+    # observer (chord ~ 0.05 AU) so it looms large without overlapping.
+    from goldilocks.skyview import _phase0
+    target, best, best_nm = 0.05, 1e9, "Companion"
+    for i in range(1, 400):
+        nm = f"Companion-{i}"
+        ph = _phase0(nm)
+        ph = min(ph, 2.0 * math.pi - ph)  # fold to [0, pi]
+        if abs(ph - target) < best:
+            best, best_nm, best_ph = abs(ph - target), nm, ph
+    chord = 2.0 * math.sin(best_ph / 2.0) * 1.0  # AU, both at a=1
+
+    g_mass, g_re = 400.0, 13.0
+    giant = Planet(name=best_nm, mass_me=g_mass, radius_re=g_re,
+                   semi_major_axis_au=1.0, eccentricity=0.0,
+                   host_star_index=0,
+                   description="Co-orbital gas giant", real_planet=False)
+    rho_p = bulk_density_gcc(g_mass, g_re)
+    rho_m = 2.0
+    a_moon = 2.0e-3
+    roche = planetary_roche_limit_au(g_re, rho_p, rho_m)
+    r_hill = planet_hill_radius_au(g_mass, 1.0, sun.mass)
+    a_crit = critical_moon_fraction(0.0, 0.0, False) * r_hill
+    assert a_moon > 1.5 * roche, (a_moon, roche)
+    assert a_moon < a_crit, (a_moon, a_crit)
+    giant.moons = [Moon("Titanis", mass_me=0.15, radius_re=1.4,
+                        a_planet_au=a_moon, eccentricity=0.02,
+                        inclination_deg=1.0, density_gcc=rho_m,
+                        kind="regular")]
+    dg = _moon_ang_diam_deg(g_re * R_EARTH_AU, chord)
+    dm = _moon_ang_diam_deg(1.4 * R_EARTH_AU, chord)
+    assert dg > 0.5, dg
+    print(f"  [companion_with_moon_system] giant ~{dg:.2f} deg, "
+          f"moon ~{dm:.3f} deg at chord {chord:.3f} AU "
+          f"(phase {math.degrees(best_ph):.1f} deg)")
+    return StarSystem.single(name, sun, planets=[observer, giant])
 
 
 # ---------------------------------------------------------------------

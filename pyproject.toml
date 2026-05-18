@@ -9,6 +9,17 @@ dependencies = [
     "numpy>=2.4.5",
 ]
 
+# Optional accelerators.  The code auto-detects these at runtime and
+# degrades cleanly to single-GPU / CPU-only when they are absent:
+#   * gpu   -- CuPy backend (pick the wheel matching your CUDA toolkit;
+#              cupy-cuda12x for CUDA 12, cupy-cuda11x for CUDA 11).
+#   * accel -- optional CPU JIT (numba) for the N-body inner loop.
+# MP4 output additionally needs `ffmpeg` on PATH (frames are streamed
+# straight into it); drivers skip the MP4 gracefully if it is missing.
+[project.optional-dependencies]
+gpu = ["cupy-cuda13x>=13.0"]
+accel = ["numba>=0.60"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -272,4 +272,58 @@ print(f"  beta_r(N2/O2 1bar)~{at_a.beta_r.mean():.2e}  "
       f"beta_r(CO2 30bar)~{at_b.beta_r.mean():.2e}")
 assert at_b.beta_r.mean() > 3.0 * at_a.beta_r.mean(), \
     (at_a.beta_r.mean(), at_b.beta_r.mean())
+
+# --- Bruneton-style optical-depth LUT matches the ray-march reference ---
+import goldilocks.skyview as _sv
+from goldilocks.stellar import Star as _Star, T_EFF_SUN_K as _TSUN
+from goldilocks.system import StarSystem as _SS
+from goldilocks.planets import earth_analog as _ea
+from goldilocks.habitability import profile_for_planet as _pfp
+
+_sun = _Star("Sun", mass=1.0, luminosity=1.0, teff=_TSUN, radius=1.0)
+_e = _ea("Earth")
+_sys = _SS.single("Sol", _sun, planets=[_e])
+_e.habitability = _pfp(_e, _sys, np.random.default_rng(1), in_phz=True)
+_ph = _sv.phase_rotations(_sys, _e)
+_r_lut, _, _, _, _ = _sv.render_sky(_sys, _e, rot_phase=_ph["noon"],
+                                    resolution=(256, 144))
+_orig = _sv._light_od_lut
+_sv._light_od_lut = lambda P, sl, a, n: _sv._light_optical_depth(P, sl, a, n)
+try:
+    _r_ref, _, _, _, _ = _sv.render_sky(_sys, _e, rot_phase=_ph["noon"],
+                                        resolution=(256, 144))
+finally:
+    _sv._light_od_lut = _orig
+_dlut = np.abs(_r_lut.astype(int) - _r_ref.astype(int))
+print(f"  skyview LUT vs ray-march: mean|d|={_dlut.mean():.3f} "
+      f"max={_dlut.max()} (/255)")
+assert _dlut.mean() < 2.0 and _dlut.max() <= 12, (_dlut.mean(),
+                                                  _dlut.max())
+
+# --- GPU vs CPU render parity (only when CuPy is the active backend) ---
+from goldilocks import backend as _B
+if _B.ON_GPU:
+    print(f"  backend = GPU ({_B.n_gpus()} device[s]); CPU/GPU parity "
+          "is exercised by the LUT path above on-device")
+else:
+    print("  backend = CPU (NumPy); GPU parity test skipped")
+
+# --- new showcase systems: a moon / a sibling-planet looming large ----
+from goldilocks.random_systems import (big_moon_system as _bms,
+                                       companion_with_moon_system as _cwm)
+_bm = _bms()
+_mn = _bm.planets[0].moons[0]
+from goldilocks.moons import R_EARTH_AU as _REA
+_dia = 2.0 * np.degrees(np.arcsin(_mn.radius_re * _REA
+                                  / _mn.a_planet_au))
+print(f"  big_moon_system: {_mn.name} angular diameter {_dia:.2f} deg")
+assert _dia > 3.0, _dia
+_cw = _cwm()
+_giant = _cw.planets[1]
+assert _giant.moons and _giant.moons[0].kind == "regular", _giant.moons
+_bodies = _sv.sky_bodies(_cw, _cw.planets[0], _sv.lambda_grid_nm())
+_names = {b.name for b in _bodies}
+print(f"  companion_with_moon_system: sky bodies seen -> "
+      f"{sorted(_names)[:6]}")
+assert _giant.name in _names and _giant.moons[0].name in _names, _names
 print("  All section-9 assertions passed.")

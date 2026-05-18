@@ -35,11 +35,13 @@ from __future__ import annotations
 import math
 from typing import Optional, Tuple, List
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.animation import FuncAnimation, FFMpegWriter
 
 import goldilocks.habitable_zone as hz
+from goldilocks import parallel as _P
 import goldilocks.secular as sec
 from goldilocks.kepler import (orbital_period)
 from goldilocks.nbody import (StarTrajectory, planet_initial_state,
@@ -620,13 +622,18 @@ def animate_system(sys: StarSystem,
         return []
 
     print(f"  Rendering {n_frames} frames at {fps} fps -> {save_path}")
-    anim = FuncAnimation(fig, update, frames=n_frames,
-                         interval=1000.0 / fps, blit=False)
-    writer = FFMpegWriter(fps=fps, bitrate=2800,
-                          codec="libx264",
-                          extra_args=["-pix_fmt", "yuv420p"])
-    anim.save(save_path, writer=writer,
-              savefig_kwargs={"facecolor": fig.get_facecolor()})
+
+    def _frames():
+        for fi in range(n_frames):
+            update(fi)
+            fig.canvas.draw()
+            buf = np.asarray(fig.canvas.buffer_rgba())
+            yield np.ascontiguousarray(buf[..., :3])
+
+    # Trails accumulate per-frame state, so the draw loop stays serial
+    # here; demo.py runs whole systems in parallel across the pool.
+    # Frames stream straight into one ffmpeg process (no FuncAnimation).
+    _P.encode_frames(save_path, _frames(), fps, bitrate=2800)
     plt.close(fig)
 
 

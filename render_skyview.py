@@ -38,6 +38,8 @@ from goldilocks.planets import earth_analog, Planet
 from goldilocks.moons import Moon
 from goldilocks.habitability import profile_for_planet, HabitabilityProfile
 from goldilocks.solar_system import random_solar_system
+from goldilocks.random_systems import (big_moon_system,
+                                       companion_with_moon_system)
 from goldilocks.skyview import (render_phases, animate_day, render_sky,
                                 phase_rotations, planck_spectral,
                                 spectrum_to_srgb, lambda_grid_nm,
@@ -79,8 +81,14 @@ def _build(seed: int):
         planets=[earth_analog("Triple-HZ", a_au=1.25, host_star_index=0)],
         quiet=True)
 
+    # Two showcase systems: a dramatically large close moon, and a
+    # co-orbital giant carrying its own large moon -- both prominent in
+    # the observer's sky.
+    sys4 = big_moon_system()
+    sys5 = companion_with_moon_system()
+
     cases = []
-    for sysX in (sys1, sys2, sys3):
+    for sysX in (sys1, sys2, sys3, sys4, sys5):
         p = sysX.planets[0]
         p.habitability = profile_for_planet(
             p, sysX, np.random.default_rng(seed + 7), in_phz=True)
