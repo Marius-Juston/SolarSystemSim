@@ -472,8 +472,283 @@ def main():
                  else "")
               + f"  [{time.time() - t0:.1f}s]")
 
+    body_view_showcase()
+    body_view_gallery(os.path.join(OUT_FIG, "bodyview_gallery.png"))
+
     print(f"\nfigures    -> {OUT_FIG}")
     print(f"animations -> {OUT_ANI}")
+
+
+def body_view_gallery(out_path: str):
+    """A broad labelled grid of body-centric views: different suns
+    (M/G/A/active/binary), moons (rocky/volcanic/icy/dune), moon
+    shadows (total + partial eclipse, gas-giant umbra) and every
+    atmosphere regime as a haloed planet body."""
+    from goldilocks.bodyview import (render_body_view, eclipse_coverage)
+    print("=== body-centric gallery (suns / moons / shadows / atmos) ===")
+    t_all = time.time()
+    res = (520, 390)
+
+    def _star_sys(name, **skw):
+        s = Star(name, **skw)
+        e = earth_analog("obs")
+        e.moons = [Moon("m", mass_me=0.01, radius_re=0.25,
+                        a_planet_au=0.003, density_gcc=3.3,
+                        kind="regular")]
+        sx = StarSystem.single(name, s, planets=[e])
+        e.habitability = profile_for_planet(
+            e, sx, np.random.default_rng(1), in_phz=True)
+        return sx, e, s
+
+    def _giant_moon_sys(a_giant, moon_kw, giant_hab=False):
+        sun = Star("G2V", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K,
+                   radius=1.0)
+        obs = earth_analog("obs", a_au=1.0)
+        gnt = Planet("Giant", mass_me=300.0, radius_re=11.0,
+                     semi_major_axis_au=a_giant, host_star_index=0)
+        mn = Moon(**moon_kw)
+        gnt.moons = [mn]
+        sx = StarSystem.single("GiantSys", sun, planets=[obs, gnt])
+        obs.habitability = profile_for_planet(
+            obs, sx, np.random.default_rng(1), in_phz=True)
+        if giant_hab:
+            gnt.habitability = profile_for_planet(
+                gnt, sx, np.random.default_rng(2))
+        return sx, obs, gnt, mn
+
+    def _atmo_sys(regime, mass, radius, a):
+        sun = Star("G2V", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K,
+                   radius=1.0)
+        obs = earth_analog("obs", a_au=0.7)
+        wld = Planet(regime, mass_me=mass, radius_re=radius,
+                     semi_major_axis_au=a, host_star_index=0)
+        sx = StarSystem.single("AtmoSys", sun, planets=[obs, wld])
+        obs.habitability = profile_for_planet(
+            obs, sx, np.random.default_rng(1), in_phz=True)
+        wld.habitability = HabitabilityProfile(
+            obliquity_deg=18.0, sidereal_day_h=20.0, solar_day_h=20.0,
+            rotation_period_h=20.0, in_phz=True, **_REGIMES[regime])
+        return sx, obs, wld
+
+    tiles = []  # (title, sys, observer, target, kw)
+
+    # --- different suns ---
+    sxS, eS, stS = _star_sys("Sun", mass=1.0, luminosity=1.0,
+                             teff=T_EFF_SUN_K, radius=1.0)
+    tiles.append(("G2V Sun  (granulation + prominences)",
+                  sxS, eS, stS, {}))
+    sxM, eM, stM = _star_sys("M3V dwarf", mass=0.35)
+    tiles.append(("M-dwarf  (deep limb-darkening, fine granules)",
+                  sxM, eM, stM, {}))
+    sxA, eA, stA = _star_sys("A2V star", mass=2.2)
+    tiles.append(("Hot A-star  (coarse bright granulation)",
+                  sxA, eA, stA, {}))
+    sxK, eK, stK = _star_sys("active K", mass=0.75)
+    eK.habitability.rotation_period_h = 5.0
+    eK.habitability.magnetic_moment_rel = 3.2
+    tiles.append(("Active K-dwarf  (large starspots)",
+                  sxK, eK, stK, {}))
+    A = Star("Alpha A", mass=1.10)
+    Bs = Star("Beta B", mass=0.55)
+    sbin = StarSystem.binary("Twin", A, Bs, separation_au=8.0,
+                             eccentricity=0.3,
+                             planets=[earth_analog("obs", a_au=1.3,
+                                                   host_star_index=0)],
+                             quiet=True)
+    sbin.planets[0].habitability = profile_for_planet(
+        sbin.planets[0], sbin, np.random.default_rng(1), in_phz=True)
+    tiles.append(("Binary: the companion sun",
+                  sbin, sbin.planets[0], Bs, {}))
+
+    # --- moons (surface regimes) ---
+    sxL, eL, _ = _star_sys("Sol", mass=1.0, luminosity=1.0,
+                           teff=T_EFF_SUN_K, radius=1.0)
+    eL.moons = [Moon("Luna", mass_me=0.0123, radius_re=0.273,
+                     a_planet_au=0.00257, eccentricity=0.0549,
+                     density_gcc=3.34, kind="regular")]
+    tiles.append(("Luna  (rocky, terminator-lit craters)",
+                  sxL, eL, eL.moons[0], {}))
+    sIo, oIo, gIo, mIo = _giant_moon_sys(
+        5.2, dict(name="Io-analog", mass_me=0.015, radius_re=0.286,
+                  a_planet_au=0.00282, eccentricity=0.0041,
+                  density_gcc=3.5, kind="regular"))
+    tiles.append(("Io-analog  (tidal-volcanic, crater-poor)",
+                  sIo, oIo, mIo, {}))
+    sEn, oEn, gEn, mEn = _giant_moon_sys(
+        6.0, dict(name="Cryo", mass_me=8e-4, radius_re=0.15,
+                  a_planet_au=0.0035, eccentricity=0.005,
+                  density_gcc=1.5, kind="regular"))
+    tiles.append(("Icy moon  (cryovolcanic, polar ice)",
+                  sEn, oEn, mEn, {}))
+    sTi, oTi, gTi, mTi = _giant_moon_sys(
+        9.6, dict(name="Tholin", mass_me=0.0225, radius_re=0.404,
+                  a_planet_au=0.0082, eccentricity=0.03,
+                  density_gcc=1.88, kind="regular"))
+    tiles.append(("Titan-analog  (cold: atmosphere + dunes)",
+                  sTi, oTi, mTi, {}))
+
+    # --- moon shadows / eclipses ---
+    seo = Star("Sun", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K,
+               radius=1.0)
+    eo = earth_analog("Earth")
+    eo.moons = [Moon("Luna", mass_me=0.0123, radius_re=0.273,
+                     a_planet_au=0.00257, eccentricity=0.0549,
+                     density_gcc=3.34, kind="regular")]
+    seo_sys = StarSystem.single("Sol", seo, planets=[eo])
+    eo.habitability = profile_for_planet(
+        eo, seo_sys, np.random.default_rng(7), in_phz=True)
+    P_luna = 0.0809
+    t_tot, c_tot, t_par, c_par = 0.0, -1.0, 0.0, 9.0
+    for t in np.linspace(0.0, P_luna, 2400):
+        c, _ = eclipse_coverage(seo_sys, eo, eo.moons[0],
+                                t_orbit=float(t))
+        if c > c_tot:
+            c_tot, t_tot = c, float(t)
+        if 0.2 < c < 0.85 and abs(c - 0.5) < abs(c_par - 0.5):
+            c_par, t_par = c, float(t)
+    tiles.append(("Total lunar eclipse  (Earth-refracted blood-moon)",
+                  seo_sys, eo, eo.moons[0],
+                  dict(t_orbit=t_tot)))
+    if c_par <= 1.0:
+        tiles.append(("Partial eclipse  (penumbral dimming)",
+                      seo_sys, eo, eo.moons[0], dict(t_orbit=t_par)))
+    # Moon in a gas giant's umbra: refraction through H2/He.
+    sGu, oGu, gGu, mGu = _giant_moon_sys(
+        4.0, dict(name="Shadowed", mass_me=0.02, radius_re=0.35,
+                  a_planet_au=0.006, eccentricity=0.02,
+                  density_gcc=2.0, kind="regular"),
+        giant_hab=True)
+    tg, cg = 0.0, -1.0
+    for t in np.linspace(0.0, 0.06, 5000):
+        c, r = eclipse_coverage(sGu, oGu, mGu, t_orbit=float(t))
+        if c > cg:
+            cg, tg = c, float(t)
+    print(f"  gas-giant umbra: max Sun coverage {cg:.0%} at "
+          f"t={tg:.5f} yr")
+    tiles.append(("Moon in a gas-giant umbra  (H2/He-refracted)",
+                  sGu, oGu, mGu, dict(t_orbit=tg)))
+
+    # --- every atmosphere regime as a haloed planet body ---
+    for rg, ttl, m, r, a in (
+            ("n2o2", "N2/O2 world  (Rayleigh-blue halo)", 1.0, 1.0, 1.0),
+            ("co2", "Runaway CO2  (yellow-orange)", 4.0, 1.4, 0.8),
+            ("titan", "Cold N2/CH4 haze  (Titan-orange)", 0.5, 0.8, 2.6),
+            ("airless", "Near-airless  (no halo)", 0.1, 0.46, 1.0),
+            ("subnep", "H2/He sub-Neptune  (white)", 9.0, 2.6, 2.2),
+            ("giant", "Banded gas giant", 120.0, 11.0, 1.3)):
+        sxA2, oA2, wA2 = _atmo_sys(rg, m, r, a)
+        tiles.append((ttl, sxA2, oA2, wA2, {}))
+
+    cols = 4
+    rows = int(np.ceil(len(tiles) / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(5.4 * cols,
+                                                  4.0 * rows))
+    fig.patch.set_facecolor("#08090d")
+    axes = np.atleast_1d(axes).ravel()
+    for ax in axes:
+        ax.axis("off")
+    for k, (title, sysG, obsG, tgtG, kwG) in enumerate(tiles):
+        try:
+            rgb, _, info = render_body_view(sysG, obsG, tgtG,
+                                            resolution=res, **kwG)
+        except Exception as e:
+            print(f"  tile {k} ({title}) skipped: {e}")
+            continue
+        ax = axes[k]
+        ax.imshow(rgb)
+        ax.set_title(title, color="white", fontsize=8)
+        sub = f"{info['kind']}"
+        if info.get("banner"):
+            sub += f"  |  {info['banner'].replace('*', '').strip()}"
+        ax.text(0.02, 0.04, sub, transform=ax.transAxes,
+                color="#9fe7ff", fontsize=7, va="bottom",
+                bbox=dict(boxstyle="round", fc="#000000AA", ec="none"))
+    fig.suptitle("Body-centric views: suns (M/G/A/active/binary), "
+                 "moons (rocky/volcanic/icy/dune), eclipses & "
+                 "gas-giant umbra, every atmosphere regime",
+                 color="white", fontsize=13)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.savefig(out_path, dpi=125, facecolor="#08090d",
+                bbox_inches="tight")
+    plt.close(fig)
+    print(f"  gallery -> {os.path.relpath(out_path, _ROOT)}  "
+          f"[{time.time() - t_all:.1f}s]  ({len(tiles)} tiles)")
+    return out_path
+
+
+def body_view_showcase():
+    """Body-centric view: a detailed star, a cratered moon + a total
+    lunar eclipse (refracted blood-moon), and a giant + its moon."""
+    from goldilocks.bodyview import (render_body_still, animate_body_view,
+                                     eclipse_coverage)
+    from goldilocks.moon_surface import moon_surface_for
+    print("=== body-centric view (star / moon / eclipse) ===")
+    sun = Star("Sun", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K,
+               radius=1.0)
+    earth = earth_analog("Earth")
+    earth.moons = [Moon("Luna", mass_me=0.0123, radius_re=0.273,
+                        a_planet_au=0.00257, eccentricity=0.0549,
+                        density_gcc=3.34, kind="regular")]
+    jov = Planet("Jovian", mass_me=180.0, radius_re=11.0,
+                 semi_major_axis_au=3.2, host_star_index=0)
+    jov.moons = [Moon("Io-analog", mass_me=0.015, radius_re=0.286,
+                      a_planet_au=0.0028, eccentricity=0.004,
+                      density_gcc=3.5, kind="regular")]
+    sysX = StarSystem.single("Sol", sun, planets=[earth, jov])
+    for p in sysX.planets:
+        p.habitability = profile_for_planet(
+            p, sysX, np.random.default_rng(7), in_phz=(p is earth))
+    luna = earth.moons[0]
+    luna.surface = moon_surface_for(luna, earth, sysX,
+                                    np.random.default_rng(3))
+    print(f"  {luna.surface.summary}")
+
+    t0 = time.time()
+    p1 = render_body_still(sysX, earth, sun,
+                           os.path.join(OUT_FIG, "bodyview_Sun.png"),
+                           resolution=(960, 720), t_orbit=0.2)
+    p2 = render_body_still(sysX, earth, luna,
+                           os.path.join(OUT_FIG, "bodyview_Moon.png"),
+                           resolution=(960, 720))
+    # Scan one Luna orbit for the deepest Earth-umbra crossing
+    # (geometry only -> can sample finely for the ~1-deg umbra window).
+    best_t, best_cov = 0.0, -1.0
+    P_luna = 0.0809  # yr (~29.5 d), close enough for the scan
+    for t in np.linspace(0.0, P_luna, 2000):
+        cov, _ = eclipse_coverage(sysX, earth, luna, t_orbit=float(t))
+        if cov > best_cov:
+            best_cov, best_t = cov, float(t)
+    p3 = render_body_still(
+        sysX, earth, luna,
+        os.path.join(OUT_FIG, "bodyview_Moon_eclipse.png"),
+        resolution=(960, 720), t_orbit=best_t)
+    p4 = render_body_still(
+        sysX, earth, jov.moons[0],
+        os.path.join(OUT_FIG, "bodyview_Giant_moon.png"),
+        resolution=(960, 720))
+    for p in (p1, p2, p3, p4):
+        print(f"  still -> {os.path.relpath(p, _ROOT)}")
+    print(f"  (deepest eclipse at t={best_t:.5f} yr, "
+          f"Sun {best_cov:.0%} covered: "
+          f"{'TOTAL umbra' if best_cov > 0.98 else 'partial/none'})"
+          f"  [{time.time() - t0:.1f}s]")
+
+    t0 = time.time()
+    try:
+        animate_body_view(
+            sysX, earth, sun,
+            os.path.join(OUT_ANI, "bodyview_Sun_rotation.mp4"),
+            n_frames=60, fps=20, duration_t=0.05, rot_turns=1.0,
+            resolution=(720, 540))
+        animate_body_view(
+            sysX, earth, luna,
+            os.path.join(OUT_ANI, "bodyview_Moon_eclipse.mp4"),
+            n_frames=72, fps=20, duration_t=P_luna, rot_turns=0.0,
+            resolution=(720, 540))
+        print(f"  MP4s -> {os.path.relpath(OUT_ANI, _ROOT)}"
+              f"  [{time.time() - t0:.1f}s]")
+    except Exception as e:
+        print(f"  body-view MP4 skipped: {e}")
 
 
 if __name__ == "__main__":

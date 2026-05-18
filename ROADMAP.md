@@ -73,20 +73,59 @@ Hänel+ 2018).
   Lambert-phase shape, deterministic starfield, reflected-flux
   scaling); no pinned value touched.
 
-### Staged — next phase (specified, NOT yet implemented)
+### Skyview v3 — body-centric view, high-detail stars, realistic moons
 
-- [ ] **S7. Body-centric view** — `render_body_view()` /
-  `animate_body_view()`: any target (planet/moon/**star**) centred and
-  detailed as an oblate body with a single-scattering **atmospheric
-  halo / limb ring**; siblings + background circle it in a fixed
-  camera. **Eclipse & transit shadow rays** via two-disk
-  angular-overlap occultation (penumbra = partial, umbra = full
-  illumination scaling) — reuse `sky_bodies` geometry. **Atmospheric
-  refraction**: a target entering a *planet's* umbra is lit by that
-  planet's Rayleigh-stripped limb-ring spectrum (reuse
-  `atmosphere_for` + `_light_optical_depth` on a grazing slant ray) →
-  physically-correct "blood-moon". Fully annotated/labelled MP4s
-  (body names, alt/az, live "TRANSIT / TOTAL ECLIPSE" banner).
+Done. Centred-body renderer with detailed stars/moons, eclipse/transit
+occultation and the physically-correct refracted blood-moon. Physics
+grounded in: NASA SVS 11418 "Solar Continuum" (multi-temperature solar
+structure); convective granule size ~ pressure scale height
+`H_p = kT/(mu m g) ~ T_eff/g` (Nordlund & Stein; Trampedach+2013;
+Stagger-grid); quadratic limb darkening `I(mu)/I(1)=1−u1(1−mu)−u2(1−mu)²`
+(Claret 2000; Sing 2010); activity–rotation spots (Noyes+1984;
+Wright+2011); divergence-free curl noise (Bridson, Hourihan &
+Nordenstam 2007); crater production `N(>D)∝D^−2` (Neukum, Ivanov &
+Hartmann 2001) + saturation (Gault 1970); simple→complex transition
+`D_sc ∝ 1/g` (Pike 1980; Melosh 1989); tidal-heating resurfacing
+(Peale, Cassen & Reynolds 1979); Titan dunes / saltation threshold
+(Lorenz+2006; Burr+2015, Nature); isostatic relief `h ∝ σ/(ρ g)`
+(Melosh; Jeffreys); Jeans atmosphere retention (Catling & Kasting 2017).
+
+- [x] **V1. `noise.py`** — vectorised seeded `value_noise_2d` / `fbm` and
+  analytic divergence-free `curl_noise_2d` on the `xp` backend
+  (Bridson+2007); cached lattice tables (`background_starfield`
+  pattern).
+- [x] **V2. `moon_surface.py`** — `MoonSurface` + `moon_surface_for`
+  (parallel to `profile_for_planet`; `Moon` gains one additive
+  `.surface` field): gravity, ice fraction, tidal-heating index,
+  `D_sc`, crater retention, atmosphere (Jeans), dune coverage,
+  isostatic relief, surface type. `render_moon_disk` shaded relief from
+  a cached equirectangular crater/dune/ice texture (windowed crater
+  stamping = disk-bbox trick).
+- [x] **V3. `starsurface.py`** — `StarSurface` + `star_surface_for`
+  (derived from `Star`, no new fields). `render_star_disk`: quadratic
+  limb darkening, curl-advected granulation + supergranulation, cool
+  spots / limb faculae, chromospheric limb ring, and analytic
+  prominence/flare arcs with fading trails.
+- [x] **V4. `bodyview.py`** — `render_body_view` / `render_body_still` /
+  `animate_body_view`; `occult_fraction` exact two-disk lens area
+  (transit dip + eclipse penumbra/umbra); `_refracted_spectrum`
+  (Chapman grazing air-mass through `atmosphere_for`) → blood-moon;
+  simplified banded/cloud planet shader; siblings + starfield reuse
+  skyview helpers.
+- [x] **V5. Driver** — `render_skyview.body_view_showcase()`: detailed
+  Sun (granulation/spot/prominence) still + rotation MP4; cratered
+  Moon + a scanned **total lunar eclipse** still + eclipse MP4; a
+  giant + its moon; graceful ffmpeg-absent skip.
+- [x] **V6. Sanity** — additive section-9 asserts: curl-noise
+  divergence ≈ 0 & determinism; `D_sc`/relief ∝ 1/g; tidal-heating
+  lowers crater retention; ice↔density; limb darkening monotone;
+  granule size ∝ T_eff/g; `occult_fraction` exact; refraction is
+  red-biased; body view is centred. No pinned value touched.
+
+**Frame-purity constraint:** animation frames render in independent
+`parallel` pool workers, so *all* time dependence is a pure function of
+`t` (no inter-frame feedback buffer) — eruption "trails" are analytic
+along-arc/`t` opacity falloff.
 
 ### Deferred — intentionally out of scope
 

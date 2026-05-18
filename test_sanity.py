@@ -326,4 +326,134 @@ _names = {b.name for b in _bodies}
 print(f"  companion_with_moon_system: sky bodies seen -> "
       f"{sorted(_names)[:6]}")
 assert _giant.name in _names and _giant.moons[0].name in _names, _names
+
+# --- Skyview v3: noise, MoonSurface, StarSurface, occultation -----------
+from goldilocks import noise as _N
+from goldilocks import backend as _BK
+
+_xp = _BK.xp
+_gr = _xp.linspace(0.0, 6.0, 40)
+_X, _Y = _xp.meshgrid(_gr, _gr)
+_a = _BK.asnumpy(_N.fbm(_X, _Y, 3, octaves=4))
+_b = _BK.asnumpy(_N.fbm(_X, _Y, 3, octaves=4))
+assert np.array_equal(_a, _b), "noise not deterministic"
+_h = 1e-2
+
+
+def _vel(px, py):
+    return _N.curl_noise_2d(px, py, 5, eps=_h)
+
+
+_u, _v = _vel(_X, _Y)
+_ux = (_vel(_X + _h, _Y)[0] - _vel(_X - _h, _Y)[0]) / (2 * _h)
+_vy = (_vel(_X, _Y + _h)[1] - _vel(_X, _Y - _h)[1]) / (2 * _h)
+_div = float(_BK.asnumpy(_xp.abs(_ux + _vy)).mean())
+print(f"  curl-noise mean|div| = {_div:.2e} (divergence-free)")
+assert _div < 1e-9, _div
+
+from goldilocks.moon_surface import moon_surface_for as _msf
+from goldilocks.moons import Moon as _Mn
+
+_sun3 = _Star("Sun", mass=1.0, luminosity=1.0, teff=_TSUN, radius=1.0)
+_gnt = Planet("Gnt", mass_me=300.0, radius_re=11.0,
+                semi_major_axis_au=5.2, host_star_index=0)
+_m_small = _Mn("sm", mass_me=1e-3, radius_re=0.08, a_planet_au=0.01,
+                eccentricity=0.0, density_gcc=3.0, kind="regular")
+_m_big = _Mn("bg", mass_me=0.05, radius_re=0.45, a_planet_au=0.01,
+              eccentricity=0.0, density_gcc=3.0, kind="regular")
+_m_io = _Mn("io", mass_me=0.015, radius_re=0.286, a_planet_au=0.00282,
+             eccentricity=0.0041, density_gcc=3.5, kind="regular")
+_m_ice = _Mn("ic", mass_me=2e-5, radius_re=0.04, a_planet_au=0.02,
+              eccentricity=0.0, density_gcc=1.4, kind="regular")
+_gnt.moons = [_m_small, _m_big, _m_io, _m_ice]
+_sg = _SS.single("S3", _sun3, planets=[_gnt])
+_rng3 = np.random.default_rng(0)
+_ssm = _msf(_m_small, _gnt, _sg, _rng3)
+_sbg = _msf(_m_big, _gnt, _sg, _rng3)
+_sio = _msf(_m_io, _gnt, _sg, _rng3)
+_sic = _msf(_m_ice, _gnt, _sg, _rng3)
+print(f"  MoonSurface: D_sc small(g={_ssm.surface_gravity_ms2:.2f})="
+      f"{_ssm.crater_transition_km:.1f} km  "
+      f"big(g={_sbg.surface_gravity_ms2:.2f})="
+      f"{_sbg.crater_transition_km:.1f} km")
+# D_sc ~ 1/g (Pike 1980): larger gravity -> smaller transition diameter.
+assert _sbg.surface_gravity_ms2 > _ssm.surface_gravity_ms2
+assert _sbg.crater_transition_km < _ssm.crater_transition_km
+# isostatic relief ~ 1/g: smaller-gravity body sustains higher relief.
+assert _ssm.max_relief_km > _sbg.max_relief_km
+# tidal heating resurfaces -> the Io-analog retains fewer craters.
+assert _sio.tidal_heating_index > 0.3, _sio.tidal_heating_index
+assert _sio.crater_density < _ssm.crater_density, (
+    _sio.crater_density, _ssm.crater_density)
+# low-density body classified ice-rich.
+assert _sic.is_icy and _sic.ice_fraction > 0.4, _sic
+assert not _sbg.is_icy, _sbg
+
+from goldilocks.starsurface import (star_surface_for as _ssf,
+                                    limb_darkening as _ld)
+
+_st_cool = _Star("M", mass=0.3)
+_st_sun = _Star("G", mass=1.0, luminosity=1.0, teff=_TSUN, radius=1.0)
+_st_hot = _Star("A", mass=2.0)
+_su_c, _su_s, _su_h = (_ssf(_st_cool), _ssf(_st_sun), _ssf(_st_hot))
+_mu = _xp.linspace(0.0, 1.0, 50)
+_ldv = _BK.asnumpy(_ld(_mu, _su_s.ld_u1, _su_s.ld_u2))
+print(f"  StarSurface: LD limb={_ldv[0]:.3f} centre={_ldv[-1]:.3f}; "
+      f"granule cool={_su_c.granule_scale_rel:.2f} "
+      f"sun={_su_s.granule_scale_rel:.2f} "
+      f"hot={_su_h.granule_scale_rel:.2f}")
+# limb darkening monotone decreasing centre -> limb.
+assert np.all(np.diff(_ldv) >= -1e-9), "limb darkening not monotone"
+assert _ldv[-1] > _ldv[0] > 0.0
+# granule size grows with Teff / falls with gravity (H_p ~ T_eff/g).
+assert _su_h.granule_scale_rel > _su_s.granule_scale_rel \
+    > _su_c.granule_scale_rel
+
+from goldilocks.bodyview import (occult_fraction as _of,
+                                 render_body_view as _rbv,
+                                 _refracted_spectrum as _refr)
+
+assert _of(2.0, 0.5, 0.5) == 0.0
+assert _of(0.0, 0.5, 1.0) == 1.0
+assert abs(_of(1.0, 1.0, 1.0) - 0.391) < 0.01, _of(1.0, 1.0, 1.0)
+print(f"  occult_fraction(1,1,1) = {_of(1.0, 1.0, 1.0):.3f} "
+      f"(equal disks, exact lens area)")
+
+_e3 = _ea("Earth")
+_e3.moons = [_Mn("Luna", mass_me=0.0123, radius_re=0.273,
+                  a_planet_au=0.00257, eccentricity=0.0549,
+                  density_gcc=3.34, kind="regular")]
+_sysv = _SS.single("Solv", _Star("Sun", mass=1.0, luminosity=1.0,
+                                  teff=_TSUN, radius=1.0),
+                    planets=[_e3])
+_e3.habitability = _pfp(_e3, _sysv, np.random.default_rng(7),
+                        in_phz=True)
+_lamv = _sv.lambda_grid_nm()
+_pl = _sv.planck_spectral(_lamv, 5772.0)
+_pl = _pl / np.trapezoid(_pl, _lamv * 1e-9)
+_rf = _refr(_e3, _pl, _lamv)
+_, _ybv, _ = _sv.cie_xyz_bar(_lamv)
+_dlv = float(_lamv[1] - _lamv[0])
+
+
+def _rgbv(s):
+    _Yv = float(np.dot(s, _ybv) * _dlv)
+    return _sv.spectrum_to_srgb(s[None, :], _lamv,
+                                0.35 / max(_Yv, 1e-12))[0]
+
+
+_rd = _rgbv(_rf)
+print(f"  refracted-limb spectrum rgb = {tuple(int(c) for c in _rd)} "
+      f"(blood-red: R >> B)")
+assert int(_rd[0]) > int(_rd[2]) + 60, _rd
+
+_rgbB, _expB, _infoB = _rbv(_sysv, _e3, _e3.moons[0],
+                            resolution=(160, 120))
+assert _rgbB.shape == (120, 160, 3)
+_cmid = _rgbB[40:80, 60:100].sum()
+_cedge = _rgbB[:20, :20].sum() + _rgbB[-20:, -20:].sum()
+print(f"  render_body_view centred: centre-sum {_cmid} >> "
+      f"corner-sum {_cedge}")
+assert _cmid > _cedge, (_cmid, _cedge)
+
 print("  All section-9 assertions passed.")
