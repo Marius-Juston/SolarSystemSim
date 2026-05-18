@@ -116,6 +116,7 @@ def curl_noise_2d(x, y, seed: int = 1, eps: float = 1e-2,
     finite differences (Bridson et al. 2007).  Divergence
     du/dx + dv/dy is ~0 to the finite-difference truncation error.
     """
+
     def psi(px, py):
         return fbm(px, py, seed, octaves=octaves)
 

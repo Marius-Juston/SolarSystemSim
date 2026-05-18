@@ -56,13 +56,12 @@ import numpy as np
 from goldilocks import backend as B
 from goldilocks import noise as N
 from goldilocks.habitability import (_jeans_parameter, M_EARTH_KG,
-                                     R_EARTH_M, G_EARTH_SI, V_ESC_EARTH)
+                                     R_EARTH_M, V_ESC_EARTH)
 from goldilocks.planets import M_JUP_OVER_M_EARTH
-from goldilocks.stellar import AU_M
 
 xp = B.xp
 
-_G_MOON_REF = 1.62      # m/s^2  (Moon: D_sc ~ 18 km anchor, Pike 1980)
+_G_MOON_REF = 1.62  # m/s^2  (Moon: D_sc ~ 18 km anchor, Pike 1980)
 _D_SC_MOON_KM = 18.0
 _SIGMA_ROCK_PA = 1.0e8  # crustal yield strength (Melosh)
 _SIGMA_ICE_PA = 3.0e7
@@ -75,15 +74,15 @@ class MoonSurface:
     escape_velocity_kms: float
     t_eq_k: float
     is_icy: bool
-    ice_fraction: float            # 0..1
-    tidal_heating_index: float     # 0..1
-    crater_transition_km: float    # simple -> complex diameter D_sc
-    crater_density: float          # 0..1 retained-crater saturation
-    crater_sfd_exponent: float     # cumulative N(>D) ~ D^-b
+    ice_fraction: float  # 0..1
+    tidal_heating_index: float  # 0..1
+    crater_transition_km: float  # simple -> complex diameter D_sc
+    crater_density: float  # 0..1 retained-crater saturation
+    crater_sfd_exponent: float  # cumulative N(>D) ~ D^-b
     has_atmosphere: bool
-    dune_coverage: float           # 0..1
+    dune_coverage: float  # 0..1
     max_relief_km: float
-    surface_type: str              # rocky|regolith|icy|volcanic|
+    surface_type: str  # rocky|regolith|icy|volcanic|
     #                                cryovolcanic|dune
     albedo: float
     summary: str = ""
@@ -186,15 +185,15 @@ def moon_surface_for(moon, planet, sys,
 
     # Surface classification + characteristic albedo.
     if tidal_heating_index > 0.30 and not is_icy:
-        surface_type, albedo = "volcanic", 0.18      # Io-like
+        surface_type, albedo = "volcanic", 0.18  # Io-like
     elif tidal_heating_index > 0.15 and is_icy:
-        surface_type, albedo = "cryovolcanic", 0.7   # Europa/Enceladus
+        surface_type, albedo = "cryovolcanic", 0.7  # Europa/Enceladus
     elif dune_coverage > 0.05:
-        surface_type, albedo = "dune", 0.12          # Titan-like
+        surface_type, albedo = "dune", 0.12  # Titan-like
     elif is_icy:
         surface_type, albedo = "icy", 0.6
     elif float(moon.mass_me) < 1e-4:
-        surface_type, albedo = "regolith", 0.06      # dark captured
+        surface_type, albedo = "regolith", 0.06  # dark captured
     else:
         surface_type, albedo = "rocky", 0.13
     albedo = float(np.clip(rng.normal(albedo, 0.02), 0.04, 0.92))
@@ -281,7 +280,7 @@ def _surface_tex(sig: Tuple, seed: int, n_lat: int = 320,
         i_lo = max(int(ic) - hl, 0)
         i_hi = min(int(ic) + hl + 1, n_lat)
         lon_hw = reach / max(math.cos(la), 0.12)
-        if lon_hw >= math.pi:                       # spans all longitudes
+        if lon_hw >= math.pi:  # spans all longitudes
             jcols = np.arange(n_lon)
         else:
             hj = int(math.ceil(lon_hw / dlon)) + 1
@@ -296,7 +295,7 @@ def _surface_tex(sig: Tuple, seed: int, n_lat: int = 320,
         t = ang / max(rad, 1e-6)
         depth = 0.06 * relief * (1.0 + 4.0 * rad)
         floor = -(1.0 - np.clip(t, 0.0, 1.0) ** 2)
-        if (D * 30.0) > d_sc:                       # complex morphology
+        if (D * 30.0) > d_sc:  # complex morphology
             floor = np.where(t < 0.45, -0.7, floor)
             floor = floor + np.where(t < 0.18,
                                      0.5 * (0.18 - t) / 0.18, 0.0)
@@ -312,7 +311,7 @@ def _surface_tex(sig: Tuple, seed: int, n_lat: int = 320,
     if dunes > 0.01:
         band = np.exp(-(LAT / math.radians(35.0)) ** 2)
         ripple = np.sin(LON * 60.0 + 6.0 * base) \
-            * np.sin(LAT * 40.0)
+                 * np.sin(LAT * 40.0)
         height += dunes * 0.04 * relief * band * ripple
 
     # Albedo map: surface-type base + mottling; bright polar ice caps

@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -64,13 +64,13 @@ _LD_U2 = np.array([-0.22, -0.05, 0.26, 0.30, 0.32, 0.34])
 class StarSurface:
     teff: float
     log_g_cgs: float
-    granule_scale_rel: float   # angular cell size relative to the Sun
+    granule_scale_rel: float  # angular cell size relative to the Sun
     ld_u1: float
     ld_u2: float
-    spot_coverage: float       # 0..1
-    spot_dt_k: float           # spot temperature deficit (negative)
-    flare_rate: float          # 0..1 activity proxy
-    prominence_index: float    # 0..1
+    spot_coverage: float  # 0..1
+    spot_dt_k: float  # spot temperature deficit (negative)
+    flare_rate: float  # 0..1 activity proxy
+    prominence_index: float  # 0..1
     summary: str = ""
 
 
@@ -168,7 +168,7 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
     ny = -(ii - rr) / rad
     rho2 = nx ** 2 + ny ** 2
     disk = rho2 <= 1.0
-    mu = xp.sqrt(xp.clip(1.0 - rho2, 0.0, 1.0))   # cos(view angle)
+    mu = xp.sqrt(xp.clip(1.0 - rho2, 0.0, 1.0))  # cos(view angle)
 
     nlam = len(lam_nm)
     base = B.asarray(_planck(lam_nm, surface.teff))
@@ -203,13 +203,13 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
                              seed=seed + 1)
     superg = N.value_noise_2d(blon * (gk * 0.12),
                               blat * (gk * 0.12), seed=seed + 2)
-    gran = 1.0 + 0.16 * cells + 0.06 * superg          # bright/dark
+    gran = 1.0 + 0.16 * cells + 0.06 * superg  # bright/dark
     # Spots (cool) + faculae (bright network toward the limb).
     spotn = N.fbm(blon * 1.7, blat * 1.7, seed=seed + 5, octaves=3)
     thr = 1.0 - 2.0 * surface.spot_coverage
     spot_mask = xp.clip((spotn - thr) / 0.25, 0.0, 1.0)
     fac = xp.clip((spotn - (thr - 0.18)) / 0.2, 0.0, 1.0) \
-        * (1.0 - mu) * 0.5
+          * (1.0 - mu) * 0.5
 
     ld = limb_darkening(mu, surface.ld_u1, surface.ld_u2)
     bright = (ld * gran * (1.0 + 0.25 * fac))[..., None]
@@ -244,7 +244,7 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
     span = rng.uniform(0.25, 0.7, n_loops)
     launch = rng.uniform(0.0, 1.0, n_loops)
     period = 1.6
-    prom = B.asarray(_planck(lam_nm, 7500.0))         # Halpha-hot
+    prom = B.asarray(_planck(lam_nm, 7500.0))  # Halpha-hot
     ns = 26
     s_arc = np.linspace(0.0, 1.0, ns)
     for k in range(n_loops):

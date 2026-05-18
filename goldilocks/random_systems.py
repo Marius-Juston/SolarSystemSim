@@ -33,8 +33,7 @@ import numpy as np
 from goldilocks.moons import (Moon, R_EARTH_AU, planetary_roche_limit_au,
                               critical_moon_fraction,
                               planet_hill_radius_au)
-from goldilocks.planets import (Planet, earth_analog, bulk_density_gcc,
-                                radius_from_mass_me)
+from goldilocks.planets import (Planet, earth_analog, bulk_density_gcc)
 from goldilocks.stellar import Star
 from goldilocks.system import StarSystem
 

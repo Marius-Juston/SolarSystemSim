@@ -1055,7 +1055,7 @@ np.ndarray, List[SkyBody]]:
             else:
                 shade = xp.exp(-rr2 / (2.0 * 0.55 ** 2))
                 rad_disk = B.asarray(b.refl_spec) / (math.pi
-                                          * (rad_eff / px_per_rad) ** 2 + 1e-12)
+                                                     * (rad_eff / px_per_rad) ** 2 + 1e-12)
             ridx = ii2[inside] * W + jj2[inside]
             tvb = xp.exp(-xp.clip(
                 beta_r[None, :] * odr_v[ridx, None]
@@ -1063,8 +1063,8 @@ np.ndarray, List[SkyBody]]:
                 0.0, 60.0))
             occ = (~hit_ground[ridx]).astype(xp.float64)
             B.scatter_add(spec, ridx,
-                      rad_disk[None, :] * shade[inside][:, None]
-                      * tvb * occ[:, None])
+                          rad_disk[None, :] * shade[inside][:, None]
+                          * tvb * occ[:, None])
             b.screen_x = cc
             b.screen_y = rr
             b.screen_r = rad_eff

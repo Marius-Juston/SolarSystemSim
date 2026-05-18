@@ -38,21 +38,21 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
 from goldilocks import backend as B
+from goldilocks.moon_surface import moon_surface_for, render_moon_disk
 from goldilocks.skyview import (lambda_grid_nm, planck_spectral,
                                 spectrum_to_srgb, cie_xyz_bar,
                                 atmosphere_for, star_sky_list, sky_bodies,
                                 background_starfield, _local_basis,
                                 _to_screen, _planet_pos_msun, _overlay,
-                                oblateness_for, N_LAMBDA_DEFAULT,
+                                N_LAMBDA_DEFAULT,
                                 H_PLANCK, C_LIGHT, K_BOLTZ)
-from goldilocks.stellar import AU_M, R_SUN_M
 from goldilocks.starsurface import star_surface_for, render_star_disk
-from goldilocks.moon_surface import moon_surface_for, render_moon_disk
+from goldilocks.stellar import AU_M, R_SUN_M
 
 xp = B.xp
 
@@ -394,7 +394,7 @@ def render_body_view(sys, observer_planet, target, *,
             parent = _find_parent_planet(sys, target)
             surf = moon_surface_for(target, parent or observer_planet,
                                     sys, np.random.default_rng(
-                                        abs(hash(target.name)) % 90000))
+                    abs(hash(target.name)) % 90000))
             render_moon_disk(
                 spec, surf, target, lam, center_px=(cc, rr),
                 radius_px=rad_px, W=W, H=H, cam_right=right, cam_up=up,
