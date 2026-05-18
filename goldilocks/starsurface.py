@@ -49,6 +49,7 @@ import numpy as np
 from goldilocks import backend as B
 from goldilocks import noise as N
 from goldilocks.stellar import G_SI, M_SUN_KG, R_SUN_M, T_EFF_SUN_K
+from goldilocks.stellar_state import StellarState
 
 xp = B.xp
 
@@ -71,17 +72,39 @@ class StarSurface:
     spot_dt_k: float  # spot temperature deficit (negative)
     flare_rate: float  # 0..1 activity proxy
     prominence_index: float  # 0..1
+    # L0-derived geometry / activity (research §3, §4.1).  All defaulted
+    # so the dataclass stays backward-compatible with legacy callers.
+    rossby: float = 2.21  # solar default
+    p_rot_days: float = 25.0
+    beta_gd: float = 0.08  # gravity-darkening exponent
+    spot_lat_deg: float = 7.0  # butterfly band centre (|latitude|)
+    evershed_kms: float = 4.0
+    active_long_amp: float = 0.0  # binary active-longitude contrast
+    phi_sub: float = 0.0  # sub-stellar longitude (binary)
     summary: str = ""
 
 
 def star_surface_for(star, rotation_period_h: Optional[float] = None,
-                     magnetic_rel: Optional[float] = None
+                     magnetic_rel: Optional[float] = None,
+                     *, age_gyr: float = 4.6,
+                     companion_msun: Optional[float] = None,
+                     orbital_period_days: Optional[float] = None,
                      ) -> StarSurface:
     """Derive a `StarSurface` from a `Star` (+ optional activity hints).
 
+    Activity is now grounded in the L0 `StellarState` Rossby number
+    (research §3/§4.1) rather than an ad-hoc heuristic.  The spot
+    coverage follows the saturated Rossby activity law
+    (Pizzolato+ 2003 / Wright+ 2011): below the saturation Rossby
+    number `Ro_sat ~ 0.13` activity is flat at maximum; above it,
+    activity ~ (Ro/Ro_sat)^-2.
+
     `rotation_period_h` / `magnetic_rel` come from the host planet's
-    `HabitabilityProfile` when available; both only sharpen the activity
-    level and are not required.
+    `HabitabilityProfile` when available; the former *overrides* the
+    Skumanich rotation period, the latter multiplicatively sharpens the
+    activity level.  Both remain optional so legacy callers are
+    unchanged.  `companion_msun`/`orbital_period_days` enable the binary
+    tidal-locking + active-longitude path.
     """
     teff = float(star.teff or T_EFF_SUN_K)
     M = float(star.mass or 1.0) * M_SUN_KG
@@ -98,29 +121,59 @@ def star_surface_for(star, rotation_period_h: Optional[float] = None,
     u1 = float(np.interp(teff, _LD_TEFF, _LD_U1))
     u2 = float(np.interp(teff, _LD_TEFF, _LD_U2))
 
-    # Activity-rotation: cool + fast-rotating + magnetised => spotty.
-    cool = float(np.clip((6000.0 - teff) / 3500.0, 0.0, 1.0))
-    rot = 1.0
+    # --- L0 state: real Rossby-number activity (research §3/§4.1) ---
+    # This is an MS-only surface renderer; a post-MS age for a massive
+    # catalogue star is expected here, so silence that advisory (it
+    # still fires for direct StellarState physics queries).
+    import warnings as _warnings
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", UserWarning)
+        state = StellarState.from_star(
+            star, age_gyr=age_gyr, companion_msun=companion_msun,
+            orbital_period_days=orbital_period_days)
+
+    ro = state.rossby
+    # Optional habitability-driven rotation overrides Skumanich.
     if rotation_period_h and math.isfinite(rotation_period_h) \
             and rotation_period_h > 0:
-        rot = float(np.clip((600.0 / rotation_period_h) ** 0.5,
-                            0.3, 3.0))
+        p_rot_days = float(rotation_period_h) / 24.0
+        ro = p_rot_days / max(state.tau_c_days, 1e-6)
+    else:
+        p_rot_days = state.p_rot_days
+
+    # Saturated Rossby activity law (Pizzolato+ 2003 / Wright+ 2011):
+    #   Ro <= Ro_sat : A = 1            (saturated dynamo)
+    #   Ro >  Ro_sat : A = (Ro/Ro_sat)^-2
+    ro_sat = 0.13
+    activity = 1.0 if ro <= ro_sat else (ro / ro_sat) ** -2.0
+    # Magnetic hint multiplicatively sharpens (kept from legacy API).
     mag = float(np.clip(magnetic_rel if magnetic_rel else 1.0, 0.1, 4.0))
-    activity = float(np.clip(0.18 * (0.4 + cool) * rot
-                             * (0.6 + 0.4 * mag), 0.0, 1.0))
-    spot_coverage = float(np.clip(0.02 + 0.30 * activity, 0.0, 0.45))
+    activity = float(np.clip(activity * (0.6 + 0.4 * mag), 0.0, 1.0))
+
+    spot_coverage = float(np.clip(0.02 + 0.40 * activity, 0.0, 0.45))
     flare_rate = activity
     prominence_index = float(np.clip(0.25 + 0.75 * activity, 0.0, 1.0))
+    # Butterfly band: quiet stars spot near the equator, active ones at
+    # higher latitudes (Maunder; research checklist 2.8/5.1).
+    spot_lat_deg = float(np.clip(4.0 + 26.0 * activity, 2.0, 35.0))
 
     s = StarSurface(
         teff=teff, log_g_cgs=log_g,
         granule_scale_rel=granule_scale_rel, ld_u1=u1, ld_u2=u2,
         spot_coverage=spot_coverage, spot_dt_k=-1500.0,
-        flare_rate=flare_rate, prominence_index=prominence_index)
+        flare_rate=flare_rate, prominence_index=prominence_index,
+        rossby=float(ro), p_rot_days=float(p_rot_days),
+        beta_gd=float(state.beta_gd), spot_lat_deg=spot_lat_deg,
+        evershed_kms=4.0,
+        active_long_amp=float(state.active_longitude_amp),
+        phi_sub=float(state.phi_sub_rad))
+    locked = " locked" if state.tidally_locked else ""
     s.summary = (f"{star.name}: Teff {teff:.0f} K, log g {log_g:.2f}, "
                  f"granule x{granule_scale_rel:.2f} Sun, "
                  f"LD (u1={u1:.2f}, u2={u2:.2f}), "
-                 f"spots {spot_coverage:.0%}, "
+                 f"Ro {ro:.2f} ({state.activity_regime()}{locked}), "
+                 f"spots {spot_coverage:.0%} @|lat|~{spot_lat_deg:.0f}deg, "
+                 f"beta {state.beta_gd:.2f}, "
                  f"prominence {prominence_index:.2f}")
     return s
 
@@ -198,7 +251,12 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
     gx = blon * gk
     gy = blat * gk
     uadv, vadv = N.curl_noise_2d(gx * 0.25, gy * 0.25, seed=seed + 3)
-    adv = 0.6 * float(t_phase)
+    # Granule turnover scales as Ro^-1/2 (research §4.1): low-Rossby
+    # (active) stars boil faster.  Normalised to the solar Ro so the
+    # slow-rotating Sun's appearance is unchanged.
+    _RO_SUN = 2.21
+    ro_fac = (max(float(surface.rossby), 1e-3) / _RO_SUN) ** -0.5
+    adv = 0.6 * float(t_phase) * ro_fac
     cells = N.value_noise_2d(gx + adv * uadv, gy + adv * vadv,
                              seed=seed + 1)
     superg = N.value_noise_2d(blon * (gk * 0.12),
@@ -211,12 +269,49 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
     fac = xp.clip((spotn - (thr - 0.18)) / 0.2, 0.0, 1.0) \
           * (1.0 - mu) * 0.5
 
+    # Butterfly latitude band: spots confined near +/- spot_lat_deg
+    # (research checklist 2.8/5.1).  Symmetric Gaussian in |latitude|.
+    blat_deg = blat * (180.0 / math.pi)
+    lat_c = float(surface.spot_lat_deg)
+    band = xp.exp(-((xp.abs(blat_deg) - lat_c) ** 2) / (2.0 * 14.0 ** 2))
+    spot_mask = spot_mask * band
+    # Active-longitude modulation (binary, research §4.1): a no-op when
+    # active_long_amp == 0 (single stars).
+    amp = float(surface.active_long_amp)
+    if amp > 0.0:
+        spot_mask = spot_mask * xp.clip(
+            1.0 + amp * xp.cos(2.0 * (blon - float(surface.phi_sub))),
+            0.0, 2.0)
+
     ld = limb_darkening(mu, surface.ld_u1, surface.ld_u2)
     bright = (ld * gran * (1.0 + 0.25 * fac))[..., None]
     rad_field = (base[None, None, :] * bright * (1.0 - spot_mask[..., None])
                  + spot[None, None, :] * (ld * gran)[..., None]
                  * spot_mask[..., None])
     rad_field = rad_field * float(flux_scale)
+
+    # Gravity darkening: T_local = Teff (g_eff/g_bar)^beta, so the
+    # bolometric radiance scales by (g_eff/g_bar)^(4 beta) (von Zeipel /
+    # Lucy; research §4.2).  Equator-darkening for fast rotators; ~1 for
+    # the slowly rotating Sun, so the pinned solar disk is unchanged.
+    M_kg = float(getattr(star, "mass", None) or 1.0) * M_SUN_KG
+    R_m = float(getattr(star, "radius", None) or 1.0) * R_SUN_M
+    g_grav = G_SI * M_kg / max(R_m, 1.0) ** 2
+    omega = 2.0 * math.pi / (max(float(surface.p_rot_days), 1e-3) * 86400.0)
+    w2r = omega * omega * R_m
+    sin_t = xp.cos(blat)            # colatitude theta = pi/2 - blat
+    cos_t = xp.sin(blat)
+    g_eff = xp.sqrt((g_grav - w2r * sin_t ** 2) ** 2
+                    + (w2r * sin_t * cos_t) ** 2)
+    # Area-weighted mean g_eff over the sphere (cheap host-side scalar).
+    _th = np.linspace(1e-3, math.pi - 1e-3, 256)
+    _ge = np.sqrt((g_grav - w2r * np.sin(_th) ** 2) ** 2
+                  + (w2r * np.sin(_th) * np.cos(_th)) ** 2)
+    g_bar = float(np.trapezoid(_ge * np.sin(_th), _th)
+                  / np.trapezoid(np.sin(_th), _th))
+    gd = xp.clip((g_eff / max(g_bar, 1e-9)) ** (4.0 * float(surface.beta_gd)),
+                 0.2, 3.0)
+    rad_field = rad_field * gd[..., None]
 
     sel = disk
     ridx = (ii[sel] * W + jj[sel]).astype(xp.int64)

@@ -3,6 +3,37 @@
 This plan maps the astrophysical models in the source document onto a concrete, parallel, Python-driven architecture
 that targets multi-GPU compute, large CPU core counts, and equation-level accuracy.
 
+> **Implementation notes (as-built, Increments 1–2).** Where the realised
+> code refines this plan:
+> - **L0 (Phase 1)** lives in `goldilocks/stellar_state.py` inside the existing
+>   `goldilocks/` package (not a new `stellarsim/`). Mass→L/R/Teff reuse the
+>   project's calibrated **Eker 2018** relations (`stellar.py`) instead of the
+>   crude piecewise power laws of §3 — smoother and already sanity-pinned.
+> - **L2 photosphere (Phase 2)** is `goldilocks/photosphere.py` with **two
+>   interchangeable step backends** behind one interface
+>   (`GOLDILOCKS_PHOTOSPHERE_BACKEND=auto|warp|reference`): an **NVIDIA Warp**
+>   `@wp.kernel` using the built-in divergence-free `wp.curlnoise`, and a
+>   dependency-free NumPy/CuPy seam. Key correction to the §2 assumption: Warp
+>   JIT-compiles the *same* kernel to **CPU *or* CUDA**, so the GPU path is
+>   fully verifiable on a CPU-only machine and is simultaneously the efficient
+>   path on the 4×A6000 box. The reference seam uses the project's seeded
+>   value-noise lattice, so the backends agree *statistically*, not
+>   bit-for-bit (verified in `test_sanity.py` section-9).
+> - **Single-GPU now.** The Warp kernel is `device`-parametrised and the
+>   texture is authored in latitude bands so the §5.2 **4-GPU strip+halo**
+>   partition drops in next with no API change.
+> - §2.12's live moderngl viewer is deferred; the standalone driver
+>   (`render_photosphere.py`) emits offline equirect+disk PNGs and an MP4 via
+>   `parallel.encode_frames` (the established driver pattern).
+> - **Increment 3** closed the genuine Phase 1–2 gaps before scaling:
+>   `T_to_spectral_class`/`spectral_class`, `StellarState.__post_init__`
+>   validation, an explicit pre-100-Myr saturated-rotation plateau, and —
+>   correcting a defect where §2.11 was ticked but absent — a real Dravins
+>   convective blueshift in the colour path, a dedicated `0.05×` low-freq
+>   sunspot channel, and a physically-grounded (`R*/1 Mm`) grid-clamped
+>   granule wavenumber with an `Ro^-1/2` granule-lifetime rate. Solar
+>   behaviour and every pinned sanity value are preserved.
+
 ---
 
 ## 1. System Architecture Overview

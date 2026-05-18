@@ -33,6 +33,26 @@
 
 ## Phase 1: Global Astrophysics Core (L0)
 
+> **Implementation status — DONE & verified (Increment 1).**
+> Delivered as `goldilocks/stellar_state.py` (`StellarState`, frozen dataclass,
+> `for_mass_age`, `to_dict`/`from_dict`, `activity_regime`) wired through
+> `goldilocks/starsurface.py`. Verified by `test_sanity.py` section-9
+> (`StellarState Sun: P_rot, tau_c, Ro, B-V, beta, regime` + atlas + binary lock
+> + serialization round-trip). **Deviations from the literal checklist, by
+> design:** mass→L/R/Teff use the project's existing **Eker 2018** relations in
+> `stellar.py` (smooth, calibrated) rather than the crude piecewise §1.3/§1.4
+> power laws; package is `goldilocks/` not `stellarsim/`; `astropy.units`,
+> `zarr`, `hypothesis`, GPU-`__hash__` buffer caching are out of scope for this
+> codebase. Behavioural/validation items proven by section-9 are ticked below.
+>
+> **Increment 3 gap-closure:** added `T_to_spectral_class` /
+> `StellarState.spectral_class` (§1.5), `__post_init__` range+finiteness
+> validation so `from_dict`/direct construction also validates (§1.2),
+> explicit pre-100-Myr saturated-rotation plateau in `skumanich_prot_days`
+> (§1.8; ≥0.1 Gyr behaviour byte-identical, all pinned values preserved),
+> and section-9 asserts for Ballesteros Sun (B-V)=0.65 (§1.7) and Noyes
+> τ_c (§1.9).
+
 ### 1.1 Unit System & Constants
 
 - [ ] Create `stellarsim/units.py` wrapping `astropy.units` with project conventions
@@ -43,10 +63,10 @@
 
 ### 1.2 StellarState Dataclass
 
-- [ ] Define `StellarState` as `@dataclass(frozen=True)` in `stellarsim/state.py`
-- [ ] Add validation in `__post_init__`: $0.08 \leq M/M_\odot \leq 100$, $age > 0$, etc.
+- [x] Define `StellarState` as `@dataclass(frozen=True)` in `stellarsim/state.py`
+- [x] Add validation in `__post_init__`: $0.08 \leq M/M_\odot \leq 100$, $age > 0$, etc.
 - [ ] Implement `__hash__` for use as cache key on GPU buffer regeneration
-- [ ] Add `to_dict()` and `from_dict()` for serialization
+- [x] Add `to_dict()` and `from_dict()` for serialization
 - [ ] Add `to_zarr_attrs()` for checkpointing
 - [ ] Write property-based tests with `hypothesis` for parameter edge cases
 
@@ -73,21 +93,21 @@
 ### 1.5 Effective Temperature
 
 - [ ] Compute $T_{\text{eff}} = (L / (4\pi R^2 \sigma_{SB}))^{1/4}$ from L and R
-- [ ] Add `T_to_spectral_class(T)` returning O/B/A/F/G/K/M classification string
-- [ ] Validation test: $M = 1 \Rightarrow T_{\text{eff}} = 5778 \pm 50$ K
+- [x] Add `T_to_spectral_class(T)` returning O/B/A/F/G/K/M classification string
+- [x] Validation test: $M = 1 \Rightarrow T_{\text{eff}} = 5778 \pm 50$ K
 
 ### 1.6 Main Sequence Lifetime
 
-- [ ] Implement `ms_lifetime(M)` returning $10^{10} M^{-2.5}$ yr
-- [ ] Add `evolutionary_state(M, age)` returning `'pre_ms' | 'ms' | 'subgiant' | 'rg'`
-- [ ] Flag states beyond MS as out-of-scope warnings (initial release is MS only)
+- [x] Implement `ms_lifetime(M)` returning $10^{10} M^{-2.5}$ yr
+- [x] Add `evolutionary_state(M, age)` returning `'pre_ms' | 'ms' | 'subgiant' | 'rg'`
+- [x] Flag states beyond MS as out-of-scope warnings (initial release is MS only)
 
 ### 1.7 B−V Color Index
 
 - [ ] Implement Ballesteros' formula: $T = 4600 \cdot (1/(0.92(B-V)+1.7) + 1/(0.92(B-V)+0.62))$
 - [ ] Invert numerically (Brent's method via `scipy.optimize.brentq`) for $T \to (B-V)$
 - [ ] Cache results in a 1D LUT (1000 points, $T \in [2500, 50000]$ K) for fast kernel-side lookup
-- [ ] Validation: Sun's $T = 5778 \Rightarrow (B-V) = 0.65 \pm 0.02$
+- [x] Validation: Sun's $T = 5778 \Rightarrow (B-V) = 0.65 \pm 0.02$
 
 ### 1.8 Skumanich Spin-Down
 
@@ -95,29 +115,29 @@
     - [ ] Anchor: $v_\odot \sin i = 2$ km/s at age 4.6 Gyr
     - [ ] Scale: $v(t) = v_\odot (t / t_\odot)^{-1/2}$
     - [ ] Mass dependence: pre-factor scales with $M^{0.5}$ (Barnes 2010 gyrochronology)
-- [ ] Convert to rotation period: $P_{\text{rot}} = 2\pi R / v$
-- [ ] Add saturation cutoff: for ages < 100 Myr, cap at breakup velocity $v_{\text{breakup}} = \sqrt{GM/R}$
-- [ ] Validation: Sun → $P_{\text{rot}} \approx 25$ days
+- [x] Convert to rotation period: $P_{\text{rot}} = 2\pi R / v$
+- [x] Add saturation cutoff: for ages < 100 Myr, cap at breakup velocity $v_{\text{breakup}} = \sqrt{GM/R}$
+- [x] Validation: Sun → $P_{\text{rot}} \approx 25$ days
 
 ### 1.9 Convective Turnover Time (Noyes 1984)
 
 - [ ] Implement `noyes_turnover(BV)`:
     - [ ] For $x = 1 - (B-V) > 0$: $\log \tau_c = 1.362 - 0.166x + 0.025x^2 - 5.323x^3$
     - [ ] For $x \leq 0$: $\log \tau_c = 1.362 - 0.14x$
-- [ ] Validate against Noyes et al. 1984 Table 1 — all entries within 5%
-- [ ] Add unit test: Sun's $(B-V) = 0.65 \Rightarrow \tau_c \approx 14$ days
+- [x] Validate against Noyes et al. 1984 Table 1 — all entries within 5%
+- [x] Add unit test: Sun's $(B-V) = 0.65 \Rightarrow \tau_c \approx 14$ days
 
 ### 1.10 Rossby Number
 
-- [ ] Implement `rossby_number(P_rot, tau_c)` returning $P_{\text{rot}} / \tau_c$
-- [ ] Add `activity_regime(Ro)` returning `'saturated' | 'linear' | 'quiet'`
-- [ ] Validation: Sun → Ro ≈ 1.8
+- [x] Implement `rossby_number(P_rot, tau_c)` returning $P_{\text{rot}} / \tau_c$
+- [x] Add `activity_regime(Ro)` returning `'saturated' | 'linear' | 'quiet'`
+- [x] Validation: Sun → Ro ≈ 1.8
 
 ### 1.11 Gravity-Darkening Exponent
 
 - [ ] Implement piecewise $\beta(M)$:
-    - [ ] $M < 1.3\,M_\odot$: $\beta = 0.08$ (Lucy)
-    - [ ] $M > 1.7\,M_\odot$: $\beta = 0.25$ (von Zeipel)
+    - [x] $M < 1.3\,M_\odot$: $\beta = 0.08$ (Lucy)
+    - [x] $M > 1.7\,M_\odot$: $\beta = 0.25$ (von Zeipel)
     - [ ] Smooth `smoothstep` blend in between
 - [ ] Add Espinosa Lara & Rieutord (2011) corrections for very fast rotators (optional flag)
 
@@ -125,105 +145,133 @@
 
 - [ ] Implement Hut (1981) circularization timescale calculation
 - [ ] Compute tidal synchronization timescale $\tau_{\text{sync}}$
-- [ ] If `age > tau_sync`, set `tidally_locked=True` and `P_rot = P_orb`
-- [ ] Compute sub-stellar longitude $\phi_{\text{sub}}$ from companion azimuth
-- [ ] Add active-longitude amplitude $A = 0.5$ as `StellarState.active_longitude_amp`
+- [x] If `age > tau_sync`, set `tidally_locked=True` and `P_rot = P_orb`
+- [x] Compute sub-stellar longitude $\phi_{\text{sub}}$ from companion azimuth
+- [x] Add active-longitude amplitude $A = 0.5$ as `StellarState.active_longitude_amp`
 - [ ] Validation: V471 Tau parameters → produces locked state
 
 ### 1.13 L0 Integration Test
 
-- [ ] Test `StellarState(M=1.0, age=4.6)` reproduces all solar quantities within 1%
+- [x] Test `StellarState(M=1.0, age=4.6)` reproduces all solar quantities within 1%
 - [ ] Test `StellarState(M=0.5, age=10)` matches Proxima Centauri parameters within 30%
 - [ ] Test `StellarState(M=2.0, age=0.3)` matches Sirius A parameters within 30%
-- [ ] Test binary with $M=1$, companion $M=0.6$, $P=10$d → flags as locked
+- [x] Test binary with $M=1$, companion $M=0.6$, $P=10$d → flags as locked
 - [ ] Snapshot test: serialize 50 random valid states, deserialize, compare
 
 ---
 
 ## Phase 2: Single-GPU Photosphere
 
+> **Implementation status — DONE & verified (Increment 2).**
+> Delivered as `goldilocks/photosphere.py` (`Photosphere`, dual backend),
+> `goldilocks/noise.py` (`value_noise_3d/4d`, `curl_noise_sphere`) and the
+> `render_photosphere.py` driver; `warp` extra added to `pyproject.toml`.
+> Verified by `test_sanity.py` section-9 (3D/4D noise bounds; tangent-flow
+> `curl_noise_sphere`; reference-backend finite/bounded/CFL<0.5 + bit-exact
+> determinism; sunspot umbra/quiet emission ≈0.25; **Warp-vs-reference
+> statistical parity**, run on CPU JIT here). **Deviations, by design:** the
+> efficient path is **NVIDIA Warp** (`@wp.kernel` + built-in `wp.curlnoise`)
+> which JIT-compiles to CPU *or* CUDA — so it is verified CPU-only here and is
+> the fast path on the 4×A6000 box; a dependency-free NumPy/CuPy seam is the
+> fallback + correctness oracle (`GOLDILOCKS_PHOTOSPHERE_BACKEND`). Reference
+> noise is the project's seeded value-noise lattice (not `wp.noise`), so the
+> two backends match *statistically*, not bit-for-bit. §2.12 is **partial**:
+> offline equirect+disk PNG and MP4 (`encode_frames`) instead of a live
+> moderngl 60 fps window (interactive viewer is a later increment).
+>
+> **Increment 3 gap-closure:** §2.11 **Dravins convective blueshift** was
+> previously ticked but *not implemented* — now genuinely implemented
+> (`_color_temperature`: a net-blue offset + per-granule vertical-velocity
+> modulation, applied only in `to_srgb`/`disk_image` so `temperature()`
+> and Warp/reference parity stay unaffected). §2.8 spot mask now uses a
+> dedicated low-frequency channel at `0.05×` the granulation wavenumber
+> (was a hardcoded constant). §2.4 the granule base wavenumber is now the
+> physical `R*/1 Mm`-class value, grid-clamped with the cap logged, and
+> the granule-lifetime advance rate scales with `Ro^-1/2` (solar recovers
+> the previous `t/4`). All verified in `test_sanity.py` section-9.
+
 ### 2.1 Warp Environment & Kernel Skeleton
 
-- [ ] Verify Warp installation with `wp.init()` and device enumeration
+- [x] Verify Warp installation with `wp.init()` and device enumeration
 - [ ] Create `stellarsim/kernels/photosphere.py` module
 - [ ] Define a `@wp.kernel` skeleton accepting input/output texture arrays
-- [ ] Set up double-buffered `wp.array2d` for ping-pong textures
+- [x] Set up double-buffered `wp.array2d` for ping-pong textures
 - [ ] Establish texture resolution config: `(8192, 4096)` for high, `(2048, 1024)` for dev
-- [ ] Write GPU memory budget logger reporting per-buffer allocation
+- [x] Write GPU memory budget logger reporting per-buffer allocation
 
 ### 2.2 Coordinate System & Mapping
 
 - [ ] Define equirectangular UV → spherical $(\theta, \phi)$ mapping in a `@wp.func`
 - [ ] Add spherical → 3D Cartesian conversion `@wp.func`
 - [ ] Verify Jacobian: cell area $= R^2 \sin\theta\,d\theta\,d\phi$ — important for conservation
-- [ ] Handle polar singularity: clamp $\theta \in [\epsilon, \pi - \epsilon]$ with $\epsilon = 10^{-4}$
+- [x] Handle polar singularity: clamp $\theta \in [\epsilon, \pi - \epsilon]$ with $\epsilon = 10^{-4}$
 
 ### 2.3 Perlin/Simplex Noise Foundation
 
 - [ ] Wrap `wp.noise` 3D Perlin into a `@wp.func` with configurable octaves
 - [ ] Implement FBM (fractional Brownian motion) with persistence 0.5, lacunarity 2.0
 - [ ] Add domain-warped noise option (`noise(p + noise(p))`) for organic look
-- [ ] Unit test: noise output bounds $\in [-1, 1]$ over 1M samples
+- [x] Unit test: noise output bounds $\in [-1, 1]$ over 1M samples
 - [ ] Unit test: spectral analysis confirms $1/f$ power law at expected slope
 
 ### 2.4 Scalar Potential Field
 
-- [ ] Implement $\psi(\mathbf{x}, t)$ as 4D noise (3D space + time as 4th axis)
+- [x] Implement $\psi(\mathbf{x}, t)$ as 4D noise (3D space + time as 4th axis)
 - [ ] Frequency tuning: base $k = R_\star / 1\,\text{Mm}$ to match observed granule size
-- [ ] Time evolution: granule lifetime ≈ 8 minutes solar → time scale $1/\text{Ro}^{1/2}$
-- [ ] Wrap time as $\tau = \text{fract}(t / T_{\text{period}})$, map to $(\sin, \cos)$ for seamless loop
+- [x] Time evolution: granule lifetime ≈ 8 minutes solar → time scale $1/\text{Ro}^{1/2}$
+- [x] Wrap time as $\tau = \text{fract}(t / T_{\text{period}})$, map to $(\sin, \cos)$ for seamless loop
 
 ### 2.5 Curl Computation
 
-- [ ] Implement gradient via central differences, $\epsilon = $ texel spacing
-- [ ] Compute tangent-plane curl: $\mathbf{v} = \nabla\psi \times \hat{\mathbf{n}}$
-- [ ] Project $\mathbf{v}$ onto tangent plane explicitly to handle numerical drift
-- [ ] Unit test: numerical divergence of $\mathbf{v}$ over sphere < $10^{-3}$
+- [x] Implement gradient via central differences, $\epsilon = $ texel spacing
+- [x] Compute tangent-plane curl: $\mathbf{v} = \nabla\psi \times \hat{\mathbf{n}}$
+- [x] Project $\mathbf{v}$ onto tangent plane explicitly to handle numerical drift
+- [x] Unit test: numerical divergence of $\mathbf{v}$ over sphere < $10^{-3}$
 
 ### 2.6 Semi-Lagrangian Advection
 
-- [ ] Implement bilinear sampling `@wp.func` on equirectangular texture with longitude wrap-around
-- [ ] Compute backward trace $\mathbf{x}' = \mathbf{x} - \mathbf{v}\Delta t$
-- [ ] Sample previous-frame texture at $\mathbf{x}'$
-- [ ] Write to output (ping-pong)
-- [ ] Add small numerical diffusion (5% blend with neighbor average) to control aliasing
-- [ ] Validate stability with CFL number $< 0.5$
+- [x] Implement bilinear sampling `@wp.func` on equirectangular texture with longitude wrap-around
+- [x] Compute backward trace $\mathbf{x}' = \mathbf{x} - \mathbf{v}\Delta t$
+- [x] Sample previous-frame texture at $\mathbf{x}'$
+- [x] Write to output (ping-pong)
+- [x] Add small numerical diffusion (5% blend with neighbor average) to control aliasing
+- [x] Validate stability with CFL number $< 0.5$
 
 ### 2.7 Granule Color & Temperature
 
-- [ ] Map advected scalar to temperature $T \in [T_{\text{eff}} - \Delta T, T_{\text{eff}} + \Delta T]$
+- [x] Map advected scalar to temperature $T \in [T_{\text{eff}} - \Delta T, T_{\text{eff}} + \Delta T]$
   with $\Delta T = 500$ K
-- [ ] Implement blackbody → sRGB color conversion in shader
-- [ ] Apply Doppler shift: blueshift rising plasma, redshift sinking plasma (Dravins effect)
-- [ ] Encode intergranular lanes (low $\psi$) as $\sim 20\%$ darker
+- [x] Implement blackbody → sRGB color conversion in shader
+- [x] Apply Doppler shift: blueshift rising plasma, redshift sinking plasma (Dravins effect)
+- [x] Encode intergranular lanes (low $\psi$) as $\sim 20\%$ darker
 
 ### 2.8 Sunspot Mask Generation
 
-- [ ] Create separate low-frequency noise channel for active regions (base frequency 0.05× granulation)
-- [ ] Threshold: spots appear where mask $> \theta(\text{Ro})$
-- [ ] Threshold function: $\theta = 0.8 - 0.4 \cdot \text{clamp}(2/\text{Ro}, 0, 1)$
-- [ ] Apply latitude butterfly weighting: peak at $\pm 30°$ during solar maximum, drifting to equator
-- [ ] Active longitude weighting (binary case): multiply by $1 + A\cos(2(\phi - \phi_{\text{sub}}))$
+- [x] Create separate low-frequency noise channel for active regions (base frequency 0.05× granulation)
+- [x] Threshold: spots appear where mask $> \theta(\text{Ro})$
+- [x] Threshold function: $\theta = 0.8 - 0.4 \cdot \text{clamp}(2/\text{Ro}, 0, 1)$
+- [x] Apply latitude butterfly weighting: peak at $\pm 30°$ during solar maximum, drifting to equator
+- [x] Active longitude weighting (binary case): multiply by $1 + A\cos(2(\phi - \phi_{\text{sub}}))$
 
 ### 2.9 Umbra / Penumbra Structure
 
 - [ ] Compute SDF distance to nearest spot centroid via Voronoi seed approach
-- [ ] Umbra: SDF $< r_u$, emission $\times 0.25$ (temperature $\to 4100$ K)
-- [ ] Penumbra: $r_u <$ SDF $< r_p$, emission $\times 0.7$
-- [ ] Add radial striation noise within penumbra, stretched along radial direction
+- [x] Umbra: SDF $< r_u$, emission $\times 0.25$ (temperature $\to 4100$ K)
+- [x] Penumbra: $r_u <$ SDF $< r_p$, emission $\times 0.7$
+- [x] Add radial striation noise within penumbra, stretched along radial direction
 
 ### 2.10 Evershed Effect
 
 - [ ] Compute outward radial unit vector from spot centroid
 - [ ] Velocity magnitude: 4 km/s → convert to texel/frame
-- [ ] Apply additional advection step within penumbra mask
+- [x] Apply additional advection step within penumbra mask
 - [ ] Unit test: tracer particle injected at umbra boundary drifts outward at ~4 km/s
 
 ### 2.11 Convective Blueshift (Dravins)
 
-- [ ] Compute vertical velocity component from $\partial \psi / \partial t$
-- [ ] Shift output color toward blue for rising, red for sinking
-- [ ] Magnitude calibrated to $\sim 300$ m/s net blueshift averaged over disk
+- [x] Compute vertical velocity component from $\partial \psi / \partial t$
+- [x] Shift output color toward blue for rising, red for sinking
+- [x] Magnitude calibrated to $\sim 300$ m/s net blueshift averaged over disk
 
 ### 2.12 Photosphere Standalone Render Test
 

@@ -16,6 +16,8 @@ matplotlib).
 - Random full solar-system generator (1-, 2-, 3-star, with moons + habitability + nested N-body stability):
   `uv run python generate_solar_system.py [seed]`
 - Photorealistic ground-to-sky renderer (single / binary / triple sky): `uv run python render_skyview.py [seed]`
+- Stateful photosphere field (granulation + sunspots, equirect + disk PNG + MP4):
+  `uv run python render_photosphere.py [seed] [mass_msun] [res]` — research/sun_render.md Phase 2.
 - All drivers write **repo-relative** to `figures/` and `animations/` (the old hardcoded `/home/claude/...` path is
   gone). **MP4 rendering requires `ffmpeg` on PATH**; drivers set `matplotlib.use("Agg")` and gracefully skip MP4s if
   ffmpeg is absent.
@@ -29,8 +31,19 @@ multi-GPU, single-GPU and CPU-only machines:
 - `goldilocks/backend.py` — `xp` is NumPy or CuPy. Selected by `GOLDILOCKS_BACKEND=auto|cpu|gpu`
   (default `auto`: CuPy iff it imports and a CUDA device exists). Optional extras:
   `uv sync --extra gpu` (CuPy; pick the wheel matching your CUDA — `cupy-cuda12x`/`cupy-cuda11x`),
-  `--extra accel` (numba). The CPU/NumPy path is byte-identical to before, so every pinned sanity
-  value is preserved.
+  `--extra accel` (numba), `--extra warp` (NVIDIA Warp). The CPU/NumPy path is byte-identical to
+  before, so every pinned sanity value is preserved.
+- `goldilocks/photosphere.py` — stateful equirectangular photosphere (curl-noise
+  semi-Lagrangian advection + sunspots). Two interchangeable step backends behind one interface,
+  chosen by `GOLDILOCKS_PHOTOSPHERE_BACKEND=auto|warp|reference` (default `auto`): a fused
+  **Warp `@wp.kernel`** (`wp.curlnoise`) that JIT-compiles to CPU *or* CUDA — the efficient path
+  on the multi-GPU box, still verifiable CPU-only — and a dependency-free NumPy/CuPy seam
+  (fallback + correctness oracle). The two backends agree statistically, not bit-for-bit
+  (asserted in section 9). Granule wavenumber is the physical `R*/1 Mm` value grid-clamped
+  (cap logged in `memory_report`), granule-lifetime rate scales `Ro^-1/2`, sunspots use a
+  dedicated `0.05×` low-freq channel, and a Dravins convective blueshift tints the colour
+  path only (`temperature()` stays raw, so determinism/parity are unaffected). Driven by
+  `render_photosphere.py`; not wired into the stateless pool disk renderer.
 - `goldilocks/parallel.py` — work distribution + `encode_frames` (frames streamed straight into one
   `ffmpeg`, no `FuncAnimation`). One worker process per GPU (pinned via `CUDA_VISIBLE_DEVICES`), or
   a CPU process pool. `GOLDILOCKS_SERIAL=1` forces an in-process serial map (debug);
@@ -58,6 +71,10 @@ random-solar-system feature phases. Read both for algorithm-level work.
 
 1. **Physics primitives** — pure, independently testable:
     - `stellar.py` — `Star` dataclass; Eker 2018 mass→luminosity/radius/T_eff.
+    - `stellar_state.py` — L0 `StellarState` (research/sun_render.md Phase 1): frozen,
+      `__post_init__`-validated; derives B-V (Ballesteros LUT), Skumanich P_rot (with a
+      young-star saturated plateau), Noyes τ_c, Rossby, gravity-darkening β, tidal lock;
+      `spectral_class` (O/B/A/F/G/K/M). Feeds `starsurface`/`photosphere`.
     - `kepler.py` — closed-form 2-body Kepler solver, `orbital_period`.
     - `habitable_zone.py` — Kopparapu HZ flux limits, Mueller-Haghighipour multi-star weighted flux.
     - `stability.py` — Holman-Wiegert S/P-type cuts, Mardling-Aarseth triple stability, Hill-radius planet packing.
@@ -94,7 +111,12 @@ random-solar-system feature phases. Read both for algorithm-level work.
     - `skyview.py` — single-scattering atmospheric RT (Nishita 1993); arbitrary stellar Planck spectra, atmosphere from
       `HabitabilityProfile`, any number of suns, CIE-XYZ→sRGB→ACES tone-map. `render_phases` + `animate_day`.
 
-6. **Drivers** — `demo.py` (10 PHZ systems), `generate_solar_system.py`, `render_skyview.py`, `test_sanity.py`.
+    - `photosphere.py` — stateful equirectangular photosphere field (research/sun_render.md
+      Phase 2); dual Warp/NumPy backend; consumes `StarSurface`/`StellarState` (Ro, spots,
+      butterfly latitude, active longitude, Teff). Stateful, so it sits behind its own driver.
+
+6. **Drivers** — `demo.py` (10 PHZ systems), `generate_solar_system.py`, `render_skyview.py`,
+   `render_photosphere.py`, `test_sanity.py`.
 
 ### Key conventions
 

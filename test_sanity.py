@@ -409,6 +409,68 @@ assert _ldv[-1] > _ldv[0] > 0.0
 assert _su_h.granule_scale_rel > _su_s.granule_scale_rel \
     > _su_c.granule_scale_rel
 
+# --- L0 StellarState core (research/sun_render.md Phase 1) -------------
+from goldilocks.stellar_state import StellarState as _StS
+
+_sun_st = _StS.for_mass_age(1.0, 4.6)
+print(f"  StellarState Sun: P_rot={_sun_st.p_rot_days:.1f} d, "
+      f"tau_c={_sun_st.tau_c_days:.1f} d, Ro={_sun_st.rossby:.2f}, "
+      f"B-V={_sun_st.bv:.3f}, beta={_sun_st.beta_gd:.3f}, "
+      f"regime={_sun_st.activity_regime()}")
+# Solar references with research-doc tolerances.
+assert 22.0 <= _sun_st.p_rot_days <= 28.0, _sun_st.p_rot_days
+assert 10.0 <= _sun_st.tau_c_days <= 18.0, _sun_st.tau_c_days
+assert 1.4 <= _sun_st.rossby <= 2.4, _sun_st.rossby
+assert 0.62 <= _sun_st.bv <= 0.68, _sun_st.bv
+assert abs(_sun_st.beta_gd - 0.08) < 1e-6, _sun_st.beta_gd
+assert _sun_st.evolutionary_state == "ms"
+# Hot star: radiative envelope -> von Zeipel beta = 0.25.
+_sir_st = _StS.for_mass_age(2.0, 0.3)
+assert abs(_sir_st.beta_gd - 0.25) < 1e-6, _sir_st.beta_gd
+assert _sir_st.teff_k > _sun_st.teff_k > _StS.for_mass_age(0.3, 5.0).teff_k
+# M-dwarf: long convective turnover, low Rossby (active).
+_md_st = _StS.for_mass_age(0.3, 5.0)
+assert _md_st.tau_c_days > _sun_st.tau_c_days, _md_st.tau_c_days
+assert _md_st.rossby < _sun_st.rossby, _md_st.rossby
+# Close binary tidally locks; wide one does not.
+_lk = _StS.for_mass_age(1.0, 5.0, companion_msun=0.6,
+                        orbital_period_days=0.52)
+_wd = _StS.for_mass_age(1.0, 5.0, companion_msun=0.6,
+                        orbital_period_days=400.0)
+assert _lk.tidally_locked and not _wd.tidally_locked, (_lk, _wd)
+assert _lk.p_rot_days == 0.52 and _lk.active_longitude_amp == 0.5
+# Round-trip serialization.
+assert _StS.from_dict(_sun_st.to_dict()) == _sun_st
+# Increment-3 gap closures (research/sun_render.md Phase 1).
+from goldilocks.stellar_state import (spectral_class_from_teff as _sct,
+                                      bv_from_teff as _bvt,
+                                      noyes_turnover_days as _noy)
+
+assert _sun_st.spectral_class == "G", _sun_st.spectral_class
+assert _sct(5772) == "G" and _sct(45000) == "O" and _sct(3000) == "M"
+assert _sir_st.spectral_class in ("A", "B"), _sir_st.spectral_class
+assert _md_st.spectral_class in ("M", "K"), _md_st.spectral_class
+# Ballesteros inverse: Sun T=5772 -> (B-V)=0.65 +/- 0.02 (checklist 1.7).
+assert abs(_bvt(5772.0) - 0.65) <= 0.02, _bvt(5772.0)
+# Noyes 1984 turnover: Sun (B-V)=0.65 -> tau_c ~ 11-18 d; monotone in B-V.
+assert 11.0 <= _noy(0.65) <= 18.0, _noy(0.65)
+assert _noy(1.0) > _noy(0.5), (_noy(1.0), _noy(0.5))
+# __post_init__ validation now fires on direct/from_dict construction.
+_bad = dict(_sun_st.to_dict())
+_bad["mass_msun"] = 500.0
+try:
+    _StS.from_dict(_bad)
+    raise AssertionError("invalid mass did not raise")
+except ValueError:
+    pass
+# Young (<100 Myr) star sits at the saturated near-breakup rotation.
+_young = _StS.for_mass_age(1.0, 0.02)
+assert _young.breakup_capped and _young.p_rot_days < 1.0, _young.p_rot_days
+print(f"  StellarState gaps: class={_sun_st.spectral_class} "
+      f"bv(5772)={_bvt(5772.0):.3f} tau_c(0.65)={_noy(0.65):.1f}d "
+      f"young P_rot={_young.p_rot_days:.2f}d (saturated) OK")
+print("  StellarState: solar refs + atlas + binary lock OK")
+
 from goldilocks.bodyview import (occult_fraction as _of,
                                  render_body_view as _rbv,
                                  _refracted_spectrum as _refr)
@@ -455,5 +517,93 @@ _cedge = _rgbB[:20, :20].sum() + _rgbB[-20:, -20:].sum()
 print(f"  render_body_view centred: centre-sum {_cmid} >> "
       f"corner-sum {_cedge}")
 assert _cmid > _cedge, (_cmid, _cedge)
+
+# --- Photosphere field (research/sun_render.md Phase 2) ---------------
+from goldilocks import noise as _Nz
+from goldilocks.photosphere import Photosphere as _Ph, _HAVE_WARP as _HW
+
+_rng9 = np.random.default_rng(9)
+_pp = _rng9.uniform(-7.0, 7.0, size=(4, 1_000_000))
+_n3 = _Nz.value_noise_3d(_pp[0], _pp[1], _pp[2], seed=3)
+_n4 = _Nz.value_noise_4d(_pp[0], _pp[1], _pp[2], _pp[3], seed=4)
+assert -1.05 <= float(_n3.min()) and float(_n3.max()) <= 1.05, \
+    (float(_n3.min()), float(_n3.max()))
+assert -1.05 <= float(_n4.min()) and float(_n4.max()) <= 1.05, \
+    (float(_n4.min()), float(_n4.max()))
+# curl_noise_sphere: flow is tangent (radial component ~ 0).
+_th = _rng9.uniform(0.2, np.pi - 0.2, 4000)
+_ph = _rng9.uniform(0.0, 2 * np.pi, 4000)
+_sx = np.sin(_th) * np.cos(_ph)
+_sy = np.sin(_th) * np.sin(_ph)
+_sz = np.cos(_th)
+_vx, _vy, _vz = _Nz.curl_noise_sphere(_sx, _sy, _sz, t=0.3, seed=5)
+_radial = np.abs(_vx * _sx + _vy * _sy + _vz * _sz)
+_vmag = np.sqrt(_vx ** 2 + _vy ** 2 + _vz ** 2) + 1e-12
+assert float(np.mean(_radial / _vmag)) < 1e-9, float(np.mean(_radial))
+print(f"  curl_noise_sphere mean|radial|/|v| = "
+      f"{float(np.mean(_radial / _vmag)):.2e} (tangent flow)")
+
+_phr = _Ph.for_star_seed(1.0, 7, backend="reference")
+_t_sun = _phr.surface.teff
+for _ in range(12):
+    _phr.step(0.1)
+_Tr = _B.asnumpy(_phr.temperature())
+assert np.isfinite(_Tr).all()
+assert _Tr.min() > 3500.0 and _Tr.max() < _t_sun + 900.0, \
+    (float(_Tr.min()), float(_Tr.max()))
+assert _phr.last_cfl < 0.5, _phr.last_cfl
+# Determinism: same seed + same steps -> bit-identical (pool-safety).
+_pa = _Ph.for_star_seed(1.0, 7, backend="reference")
+_pb = _Ph.for_star_seed(1.0, 7, backend="reference")
+for _ in range(6):
+    _pa.step(0.1)
+    _pb.step(0.1)
+assert np.array_equal(_B.asnumpy(_pa.scalar()), _B.asnumpy(_pb.scalar()))
+# Sunspots darken: umbral emission ~ 0.25 of quiet Sun (research 2.9).
+_em = _B.asnumpy(_phr.emission())
+_um = _B.asnumpy(_phr._umbra)
+if (_um > 0.6).sum() > 5:
+    _ratio = float(_em[_um > 0.6].mean() / _em[_um < 0.05].mean())
+    assert 0.10 <= _ratio <= 0.45, _ratio
+    print(f"  sunspot umbra/quiet emission = {_ratio:.2f} (~0.25)")
+else:
+    print("  sunspot umbra: few pixels at dev res (quiet Sun) -- skipped")
+print(f"  Photosphere[reference] T in [{_Tr.min():.0f},{_Tr.max():.0f}] K, "
+      f"CFL={_phr.last_cfl:.2f}, deterministic OK")
+# Increment-3 Phase-2 gap closures.
+# Granule wavenumber is physically grounded (R*/1Mm) then grid-capped.
+assert _phr.k_phys > 100.0 and _phr._freq_capped, _phr.k_phys
+# Separate low-frequency sunspot channel at 0.05x granulation (2.8).
+assert abs(_phr.spot_freq - max(0.05 * _phr.freq, 0.6)) < 1e-9
+# Solar granule-lifetime advance rate recovers ~0.25 (~ the old t/4);
+# a more active (lower-Ro) star boils faster (rate scales Ro^-1/2).
+assert abs(_phr._time_rate - 0.25) < 5e-3, _phr._time_rate
+_active = _Ph.for_star_seed(0.4, 7, backend="reference")
+assert _active._time_rate > _phr._time_rate, _active._time_rate
+# Dravins blueshift (2.11): colour temp != raw temp; small, net-blue.
+_ct = _B.asnumpy(_phr._color_temperature())
+_dnud = _ct - _Tr
+assert np.abs(_dnud).max() < 25.0, float(np.abs(_dnud).max())
+assert 0.0 < float(_dnud.mean()) < 8.0, float(_dnud.mean())
+print(f"  Photosphere gaps: k_phys={_phr.k_phys:.0f}->{_phr.freq:.0f} "
+      f"spot_k={_phr.spot_freq:.2f} Dravins net=+{_dnud.mean():.2f} K "
+      f"(blue) OK")
+
+if _HW:
+    _pw = _Ph.for_star_seed(1.0, 7, backend="warp")
+    for _ in range(12):
+        _pw.step(0.1)
+    _Tw = _B.asnumpy(_pw.temperature())
+    assert np.isfinite(_Tw).all()
+    assert _pw.last_cfl < 0.5, _pw.last_cfl
+    # Different noise bases (value-noise vs Warp Perlin) -> compare the
+    # field *statistics*, not bit values.
+    _dm = abs(float(_Tw.mean()) - float(_Tr.mean()))
+    _ds = abs(float(_Tw.std()) - float(_Tr.std()))
+    assert _dm < 80.0 and _ds < 350.0, (_dm, _ds)
+    print(f"  Photosphere[warp] T mean d={_dm:.1f} K std d={_ds:.1f} K "
+          f"(CPU JIT; parity-to-tolerance OK)")
+else:
+    print("  Photosphere[warp] skipped (warp-lang not importable)")
 
 print("  All section-9 assertions passed.")
