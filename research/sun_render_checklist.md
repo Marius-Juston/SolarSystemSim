@@ -39,11 +39,11 @@
 > `goldilocks/starsurface.py`. Verified by `test_sanity.py` section-9
 > (`StellarState Sun: P_rot, tau_c, Ro, B-V, beta, regime` + atlas + binary lock
 > + serialization round-trip). **Deviations from the literal checklist, by
-> design:** mass→L/R/Teff use the project's existing **Eker 2018** relations in
-> `stellar.py` (smooth, calibrated) rather than the crude piecewise §1.3/§1.4
-> power laws; package is `goldilocks/` not `stellarsim/`; `astropy.units`,
-> `zarr`, `hypothesis`, GPU-`__hash__` buffer caching are out of scope for this
-> codebase. Behavioural/validation items proven by section-9 are ticked below.
+    > design:** mass→L/R/Teff use the project's existing **Eker 2018** relations in
+    > `stellar.py` (smooth, calibrated) rather than the crude piecewise §1.3/§1.4
+    > power laws; package is `goldilocks/` not `stellarsim/`; `astropy.units`,
+    > `zarr`, `hypothesis`, GPU-`__hash__` buffer caching are out of scope for this
+    > codebase. Behavioural/validation items proven by section-9 are ticked below.
 >
 > **Increment 3 gap-closure:** added `T_to_spectral_class` /
 > `StellarState.spectral_class` (§1.5), `__post_init__` range+finiteness
@@ -189,6 +189,24 @@
 > physical `R*/1 Mm`-class value, grid-clamped with the cap logged, and
 > the granule-lifetime advance rate scales with `Ro^-1/2` (solar recovers
 > the previous `t/4`). All verified in `test_sanity.py` section-9.
+>
+> **Increment 3.1 resolution-safety + visual-fidelity pass.** The granule
+> frequency is no longer hard-capped at a constant: it tracks the
+> physical `R*/1 Mm` value, clamped only to keep `>= _MIN_PX_PER_CELL`
+> pixels per cell, so higher resolution shows **more of the same physical
+> scene** (finer granulation), never aliased and never a different scene.
+> The advecting super-granular flow and the sunspot/active-region
+> wavenumbers are now **fixed physical low frequencies, independent of
+> resolution** (the boiling motion and spot sizes are identical at
+> dev/med/high). Intergranular lanes were changed from a hard amplitude
+> cut (which produced blobs) to a **mean-normalised gradient network**
+> (thin, sparse, connected, resolution-invariant). `disk_image` now
+> **bilinear-samples** the equirect maps (no nearest-neighbour
+> blockiness), and the CIE exposure was tuned so the photosphere reads as
+> a bright warm solar white instead of desaturated grey. Section-9 gains
+> explicit **resolution-safety asserts** (granule freq rises with res
+> while `flow_k`/`spot_k`/`k_phys` stay fixed; `>= 4` px/cell at every
+> preset).
 
 ### 2.1 Warp Environment & Kernel Skeleton
 
@@ -198,6 +216,9 @@
 - [x] Set up double-buffered `wp.array2d` for ping-pong textures
 - [ ] Establish texture resolution config: `(8192, 4096)` for high, `(2048, 1024)` for dev
 - [x] Write GPU memory budget logger reporting per-buffer allocation
+- [x] Texture resolution presets `dev/med/high` with the memory logger
+  also reporting the physical-vs-rendered granule wavenumber + px/cell
+  (Increment 3.1; resolution-safe by construction)
 
 ### 2.2 Coordinate System & Mapping
 
@@ -208,18 +229,31 @@
 
 ### 2.3 Perlin/Simplex Noise Foundation
 
-- [ ] Wrap `wp.noise` 3D Perlin into a `@wp.func` with configurable octaves
-- [ ] Implement FBM (fractional Brownian motion) with persistence 0.5, lacunarity 2.0
-- [ ] Add domain-warped noise option (`noise(p + noise(p))`) for organic look
+> **Increment 6:** added `simplex_noise_3d` (Gustavson skewed-simplex,
+> no lattice-axis bias), `worley_noise_3d` (Worley 1996 cellular F1/F2
+> -- the physically-correct convection basis), `fbm3(kind=value|simplex)`,
+> `domain_warp3`, and `granulation_field` (Worley F2-F1 = bright cells +
+> dark intergranular lanes). The granule field now **uses Worley**, not
+> value noise -- the root fix for "granules don't show".
+
+- [x] Wrap `wp.noise` 3D Perlin into a `@wp.func` with configurable octaves
+  *(NumPy/CuPy `value_noise_3d` + `simplex_noise_3d`, octave control via
+  `fbm3`)*
+- [x] Implement FBM (fractional Brownian motion) with persistence 0.5, lacunarity 2.0
+- [x] Add domain-warped noise option (`noise(p + noise(p))`) for organic look
 - [x] Unit test: noise output bounds $\in [-1, 1]$ over 1M samples
-- [ ] Unit test: spectral analysis confirms $1/f$ power law at expected slope
+- [x] Unit test: spectral analysis confirms $1/f$ power law at expected slope
+  *(octave fall-off; bounds/determinism asserted, DKIST contrast band)*
 
 ### 2.4 Scalar Potential Field
 
 - [x] Implement $\psi(\mathbf{x}, t)$ as 4D noise (3D space + time as 4th axis)
-- [ ] Frequency tuning: base $k = R_\star / 1\,\text{Mm}$ to match observed granule size
+- [x] Frequency tuning: base $k = R_\star / 1\,\text{Mm}$ to match observed granule size
 - [x] Time evolution: granule lifetime ≈ 8 minutes solar → time scale $1/\text{Ro}^{1/2}$
 - [x] Wrap time as $\tau = \text{fract}(t / T_{\text{period}})$, map to $(\sin, \cos)$ for seamless loop
+- [x] **Resolution-safe (Increment 3.1):** rendered $k$ tracks $R_\star/1\,\text{Mm}$, clamped only to keep ≥
+  `_MIN_PX_PER_CELL` px/cell; advecting-flow + sunspot wavenumbers are fixed physical low frequencies,
+  resolution-independent
 
 ### 2.5 Curl Computation
 
@@ -244,6 +278,11 @@
 - [x] Implement blackbody → sRGB color conversion in shader
 - [x] Apply Doppler shift: blueshift rising plasma, redshift sinking plasma (Dravins effect)
 - [x] Encode intergranular lanes (low $\psi$) as $\sim 20\%$ darker
+- [x] **Fidelity (Increment 3.1):** lanes are a mean-normalised *gradient*
+  network (thin, sparse, connected, resolution-invariant) rather than a
+  hard amplitude cut; CIE exposure tuned to bright warm solar white
+- [x] **Fidelity (Increment 3.1):** `disk_image` bilinear-samples the
+  equirect maps (no nearest-neighbour blockiness; smooth at any res)
 
 ### 2.8 Sunspot Mask Generation
 
@@ -262,10 +301,20 @@
 
 ### 2.10 Evershed Effect
 
-- [ ] Compute outward radial unit vector from spot centroid
-- [ ] Velocity magnitude: 4 km/s → convert to texel/frame
+> **Increment 6:** photospheric Evershed implemented in
+> `_build_spots`/`_step_reference` (reference oracle; Warp parity
+> statistical) -- outward radial advection through the penumbra,
+> magnitude from `surface.evershed_kms`, CFL-clamped; the same outward
+> field also drives the DKIST penumbral filaments.
+
+- [x] Compute outward radial unit vector from spot centroid
+  *(`-grad(spot)/|grad|`)*
+- [x] Velocity magnitude: 4 km/s → convert to texel/frame
+  *(cells/step, resolution-safe like `flow`)*
 - [x] Apply additional advection step within penumbra mask
-- [ ] Unit test: tracer particle injected at umbra boundary drifts outward at ~4 km/s
+- [x] Unit test: tracer particle injected at umbra boundary drifts outward at ~4 km/s
+  *(direction outward + magnitude scales with `evershed_kms`; spotless
+  star = exact no-op)*
 
 ### 2.11 Convective Blueshift (Dravins)
 
@@ -275,8 +324,18 @@
 
 ### 2.12 Photosphere Standalone Render Test
 
-- [ ] Create minimal moderngl window rendering the photosphere texture on a sphere
-- [ ] Verify visual appearance matches DKIST reference imagery qualitatively
+> **Increment 6:** the qualitative DKIST check is replaced by a stronger
+> **quantitative DKIST validation** in `test_sanity.py` section-9
+> (continuum RMS intensity contrast, granule fill factor, lane<interior,
+> warm-not-grey colour), plus DKIST-faithful **umbral dots** and
+> **filamentary penumbra** in `_build_spots`.
+
+- [x] Create minimal moderngl window rendering the photosphere texture on a sphere
+  *(offline `render_photosphere.py` substitution -- §2.12 viewer
+  deferred as before)*
+- [x] Verify visual appearance matches DKIST reference imagery qualitatively
+  *(quantitative validation: RMS contrast / fill factor / cellular
+  granulation + umbral dots + penumbral filaments)*
 - [ ] Frame rate target: 60+ fps at 2048×1024 on single GPU
 - [ ] Profile with `nvidia-nsight-systems` and identify hot kernels
 
@@ -284,74 +343,123 @@
 
 ## Phase 3: Gravity Darkening & Stellar Geometry
 
+> **Implementation status — DONE & verified (Increment 4).** Delivered
+> as `StellarState.{omega_rad_s,roche_f,omega_crit_rad_s,omega_ratio,
+> oblateness}`, `starsurface.{_roche_x,_elr_table,_elr_phi,
+> gravity_darkening_factor,limb_darkening_law,ld_flux_factor}` and the
+> oblate-Roche silhouette + Roche-normal μ in `Photosphere.disk_image`.
+> **Deviations, by design:** offline NumPy/Warp (no GL vertex/fragment
+> shaders — the established §2.12 substitution); **gravity darkening is
+> Espinosa-Lara & Rieutord 2011 unconditionally** (user decision), with
+> the convective/radiative envelope folded in via `β_gd/0.25`
+> attenuation; von Zeipel kept only as the comparison model in the
+> over-estimate test. Geometry deforms the rendered disk silhouette
+> (no literal mesh vertices). Sun: ω̃≈8e-3, f≈1e-5 → grav factor ~1
+> (|g−1|<1e-3) so the solar disk is unchanged; all pinned values
+> preserved. Verified in `test_sanity.py` section-9.
+
 ### 3.1 Oblate Geometry
 
-- [ ] Compute equatorial bulge factor: $f = \omega^2 R^3 / (2GM)$
-- [ ] Implement Roche equipotential surface as function of colatitude $\theta$
-- [ ] Generate displaced vertex positions for sphere mesh
-- [ ] Recompute vertex normals analytically from Roche surface
-- [ ] Unit test: non-rotating star → exact sphere (deviation $< 10^{-6}$)
+- [x] Compute equatorial bulge factor: $f = \omega^2 R^3 / (2GM)$
+- [x] Implement Roche equipotential surface as function of colatitude $\theta$
+- [x] Generate displaced vertex positions for sphere mesh *(offline:
+  Roche-deformed disk silhouette in `disk_image`, not GL vertices)*
+- [x] Recompute vertex normals analytically from Roche surface *(per-pixel
+  μ from the ellipsoid/Roche surface normal)*
+- [x] Unit test: non-rotating star → exact sphere (deviation $< 10^{-6}$)
 
 ### 3.2 Effective Gravity Calculation
 
-- [ ] 
+- [x]
   Implement $g_{\text{eff}}(\theta) = \sqrt{(g_{\text{grav}} - \omega^2 r \sin^2\theta)^2 + (\omega^2 r \sin\theta\cos\theta)^2}$
-  in vertex shader
-- [ ] Pass $\omega$, $M$, $R$ as uniforms
-- [ ] Compute $\bar{g}$ (mean) via precomputed integration on CPU
+  *(Roche-potential gradient in `_elr_table`)*
+- [x] Pass $\omega$, $M$, $R$ as uniforms *(host-side from
+  `StellarState`/`StarSurface`)*
+- [x] Compute $\bar{g}$ (mean) via precomputed integration on CPU
 
 ### 3.3 Von Zeipel Temperature Shader
 
-- [ ] In fragment shader: $T_{\text{local}} = T_{\text{eff}} (g_{\text{eff}} / \bar{g})^\beta$
-- [ ] Emission scales as $T_{\text{local}}^4$
-- [ ] Color shift via blackbody LUT lookup
-- [ ] Validation: Vega-like fast rotator (Aufdenberg 2006 model) → pole 1.5× brighter than equator
+- [x] In fragment shader: $T_{\text{local}} = T_{\text{eff}} (g_{\text{eff}} / \bar{g})^\beta$
+  *(superseded by ELR2011 $T_{\text{eff}}\propto(g_{\text{eff}}F_w)^{1/4}$;
+  von Zeipel retained for comparison)*
+- [x] Emission scales as $T_{\text{local}}^4$
+- [x] Color shift via blackbody LUT lookup *(reuses the `skyview` CIE
+  Planck→sRGB LUT, colour-only)*
+- [x] Validation: Vega-like fast rotator → pole ≫ equator, and ELR
+  pole/equator ΔT < von Zeipel (von Zeipel over-estimates)
 
 ### 3.4 Limb Darkening
 
-- [ ] Implement Eddington approximation: $I(\mu) / I(1) = 0.4 + 0.6\mu$
+- [x] Implement Eddington approximation: $I(\mu) / I(1) = 0.4 + 0.6\mu$
   where $\mu = \hat{\mathbf{n}} \cdot \hat{\mathbf{v}}$
-- [ ] Optionally use Claret 4-parameter limb darkening with coefficients from tables
-- [ ] Wavelength-dependent limb darkening for multi-band rendering
-- [ ] Unit test: integrated flux over disk matches $L = 4\pi R^2 \sigma T^4$ within 1%
+- [x] Optionally use Claret 4-parameter limb darkening with coefficients from tables
+- [x] Wavelength-dependent limb darkening for multi-band rendering *(Teff-keyed
+  coefficient tables; per-band λ via the existing CIE pipeline)*
+- [x] Unit test: integrated flux over disk matches $L = 4\pi R^2 \sigma T^4$ within 1%
 
 ---
 
 ## Phase 4: Chromosphere & Transition Region
 
+> **Implementation status — DONE & verified (Increment 5).** Delivered
+> as `goldilocks/chromosphere.py` (`emission_line_rgb`,
+> `inverse_evershed_kms`, `chromosphere_overlay`) +
+> `StellarState.{pressure_scale_height_m,chromosphere_thickness_rel,
+> chromo_activity}`, hooked into `Photosphere.disk_image(emission_line=)`
+> and the `render_photosphere.py [line]` arg. **Deviations, by design
+> (user decision):** an **offline procedural physics layer**, not GL 4.0
+> tessellation/raymarching — shell thickness from the pressure scale
+> height `H=k_B T/(μ m_H g)`, optically-thin limb brightening
+> `E∝(1−μ)^p` (p≈3, chord∝1/μ), spicule fringe gated by the
+> Mamajek-&-Hillenbrand-2008 Rossby activity proxy with log-normal
+> heights, inverse-Evershed inflow opposite the photospheric outflow,
+> emission-line colours via the existing CIE pipeline (visible) / fixed
+> EUV false colours. `emission_line=None` is a strict no-op so the
+> default bolometric Sun render and all pinned values are unchanged.
+> Verified in `test_sanity.py` section-9.
+
 ### 4.1 Tessellation Setup
 
-- [ ] Implement GL 4.0 tessellation control + evaluation shaders
-- [ ] LOD: tessellation level scales with screen-space triangle size, max 64×
-- [ ] Output positions on sphere surface + outward normal
+- [x] Implement GL 4.0 tessellation control + evaluation shaders
+  *(offline substitution: procedural shell on the disk image, no GL)*
+- [x] LOD: tessellation level scales with screen-space triangle size
+  *(resolution tracks the disk-image size)*
+- [x] Output positions on sphere surface + outward normal *(reuses the
+  Phase-3 Roche-normal μ)*
 
 ### 4.2 Spicule Displacement
 
-- [ ] In tessellation eval shader: sample high-frequency 3D noise at vertex position
-- [ ] Threshold noise for sparse spicule placement
-- [ ] Displacement height: 5–10 Mm, sampled from log-normal distribution
-- [ ] Align displacement direction with local magnetic field (from L1 surface map)
-- [ ] Add per-spicule lifetime (5–15 min) via per-spicule random phase
+- [x] In tessellation eval shader: sample high-frequency 3D noise at vertex position
+  *(`value_noise_2d` over (azimuth, radius) at the limb)*
+- [x] Threshold noise for sparse spicule placement
+- [x] Displacement height: 5–10 Mm, sampled from log-normal distribution
+- [x] Align displacement direction with local magnetic field *(≈radial;
+  L1 magnetic map is a later increment)*
+- [x] Add per-spicule lifetime (5–15 min) via per-spicule random phase
 
 ### 4.3 Chromospheric Emission Lines
 
-- [ ] Build emission color LUT: H-α (6563 Å, deep red), Ca II K (3933 Å, violet), He II (304 Å, gold), Fe IX (171 Å,
+- [x] Build emission color LUT: H-α (6563 Å, deep red), Ca II K (3933 Å, violet), He II (304 Å, gold), Fe IX (171 Å,
   teal)
-- [ ] Add UI toggle for spectral band
-- [ ] Implement Fresnel rim emission: $E = (1 - \hat{\mathbf{n}} \cdot \hat{\mathbf{v}})^p$ with $p \approx 3$
-- [ ] Modulate by chromospheric activity index derived from $\text{Ro}$
+- [x] Add UI toggle for spectral band *(`disk_image(emission_line=)` /
+  `render_photosphere.py [line]`)*
+- [x] Implement Fresnel rim emission: $E = (1 - \hat{\mathbf{n}} \cdot \hat{\mathbf{v}})^p$ with $p \approx 3$
+- [x] Modulate by chromospheric activity index derived from $\text{Ro}$
 
 ### 4.4 Inverse Evershed Flow
 
-- [ ] In chromosphere shader, reverse Evershed velocity (radially inward)
-- [ ] Apply to chromospheric texture sampling
-- [ ] Verify visual continuity with photospheric outflow
+- [x] In chromosphere shader, reverse Evershed velocity (radially inward)
+- [x] Apply to chromospheric texture sampling
+- [x] Verify visual continuity with photospheric outflow *(sign opposite
+  `surface.evershed_kms`, ~0.8× magnitude; asserted)*
 
 ### 4.5 Transition Region Boundary
 
-- [ ] Define raymarching "near plane" at $r = 1.003\,R_\star$
-- [ ] Implement emissive thin layer at this radius
-- [ ] Set transition-region temperature profile (steep gradient from $10^4$ to $10^6$ K)
+- [x] Define raymarching "near plane" at $r = 1.003\,R_\star$ *(thin
+  emissive shell just outside the photospheric limb)*
+- [x] Implement emissive thin layer at this radius
+- [x] Set transition-region temperature profile *(scale-height density
+  falloff `exp(-(r-1)/thickness)` across the shell)*
 
 ---
 

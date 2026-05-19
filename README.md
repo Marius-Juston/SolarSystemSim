@@ -124,9 +124,9 @@ Each system produces:
   numerically evaluated Laplace coefficients b_{3/2}^(j) (alpha)
 * N-body planet acceleration:
   d^2 r_i / dt^2 = -G sum_s M_s (r_i - r_s(t)) / |r_i - r_s|^3
-  - G sum_{j != i} m_j (r_i - r_j) / |r_i - r_j|^3
-  with stars on analytical Kepler orbits and planets integrated with a
-  leapfrog symplectic scheme (adaptive sub-stepping per planet period).
+    - G sum_{j != i} m_j (r_i - r_j) / |r_i - r_j|^3
+      with stars on analytical Kepler orbits and planets integrated with a
+      leapfrog symplectic scheme (adaptive sub-stepping per planet period).
 
 ## References
 

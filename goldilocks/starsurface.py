@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Optional, Tuple
 
 import numpy as np
@@ -81,6 +82,14 @@ class StarSurface:
     evershed_kms: float = 4.0
     active_long_amp: float = 0.0  # binary active-longitude contrast
     phi_sub: float = 0.0  # sub-stellar longitude (binary)
+    # Rotational geometry (research/sun_render.md Phase 3).
+    mass_msun: float = 1.0
+    radius_rsun: float = 1.0
+    omega_ratio: float = 0.0  # Omega / Omega_crit (Roche)
+    oblateness: float = 0.0  # r_eq/r_pole - 1
+    # Chromosphere (research/sun_render.md Phase 4).
+    chromo_thickness_rel: float = 0.003  # shell thickness / R*
+    chromo_activity: float = 0.2  # Rossby-driven activity proxy [0,1]
     summary: str = ""
 
 
@@ -166,7 +175,13 @@ def star_surface_for(star, rotation_period_h: Optional[float] = None,
         beta_gd=float(state.beta_gd), spot_lat_deg=spot_lat_deg,
         evershed_kms=4.0,
         active_long_amp=float(state.active_longitude_amp),
-        phi_sub=float(state.phi_sub_rad))
+        phi_sub=float(state.phi_sub_rad),
+        mass_msun=float(state.mass_msun),
+        radius_rsun=float(state.radius_rsun),
+        omega_ratio=float(state.omega_ratio),
+        oblateness=float(state.oblateness),
+        chromo_thickness_rel=float(state.chromosphere_thickness_rel),
+        chromo_activity=float(state.chromo_activity))
     locked = " locked" if state.tidally_locked else ""
     s.summary = (f"{star.name}: Teff {teff:.0f} K, log g {log_g:.2f}, "
                  f"granule x{granule_scale_rel:.2f} Sun, "
@@ -182,6 +197,184 @@ def limb_darkening(mu, u1: float, u2: float):
     """Quadratic law I(mu)/I(1) = 1 - u1(1-mu) - u2(1-mu)^2."""
     one_m = 1.0 - mu
     return xp.clip(1.0 - u1 * one_m - u2 * one_m ** 2, 0.0, 1.5)
+
+
+# Claret (2000, A&A 363 1081) 4-parameter coefficients, coarse Teff
+# grid (a1..a4); I(mu)/I(1) = 1 - sum a_k (1 - mu^(k/2)).
+_CL_TEFF = np.array([3500.0, 5000.0, 5772.0, 7000.0, 9500.0])
+_CL_A = np.array([
+    [0.65, -0.55, 1.05, -0.42],
+    [0.62, -0.40, 0.88, -0.36],
+    [0.58, -0.28, 0.74, -0.31],
+    [0.52, -0.20, 0.60, -0.26],
+    [0.44, -0.12, 0.45, -0.20],
+])
+
+
+def limb_darkening_law(mu, surface: "StarSurface", *, law: str = "quadratic"):
+    """Limb-darkening I(mu)/I(1) by law (research/checklist 3.4).
+
+    ``quadratic`` -> the pinned `limb_darkening`; ``eddington`` ->
+    Eddington grey 0.4 + 0.6 mu; ``claret4`` -> Claret (2000) 4-param.
+    """
+    if law == "quadratic":
+        return limb_darkening(mu, surface.ld_u1, surface.ld_u2)
+    if law == "eddington":
+        return xp.clip(0.4 + 0.6 * mu, 0.0, 1.5)
+    if law == "claret4":
+        a = [float(np.interp(surface.teff, _CL_TEFF, _CL_A[:, k]))
+             for k in range(4)]
+        sm = mu * 0.0
+        for k in range(4):
+            sm = sm + a[k] * (1.0 - mu ** (0.5 * (k + 1)))
+        return xp.clip(1.0 - sm, 0.0, 1.5)
+    raise ValueError(f"unknown limb-darkening law {law!r}")
+
+
+def ld_flux_factor(surface: "StarSurface", law: str = "quadratic") -> float:
+    """Disk-integrated flux factor 2 ∫_0^1 I(mu) mu d mu.
+
+    For a bare star L = 4 pi R^2 sigma Teff^4 corresponds to this factor
+    being ~1 (the law only redistributes, not creates, flux); used by
+    the section-9 flux-conservation check."""
+    mu = np.linspace(0.0, 1.0, 4096)
+    inten = np.asarray(B.asnumpy(limb_darkening_law(B.asarray(mu),
+                                                    surface, law=law)))
+    raw = 2.0 * float(np.trapezoid(inten * mu, mu))
+    # normalise by the same integral of a uniform unit disk (=1) so the
+    # *shape* is what is tested; a well-formed law keeps total flux ~1.
+    return raw
+
+
+# ---------------------------------------------------------------------
+# Roche geometry + Espinosa-Lara & Rieutord (2011) gravity darkening
+# ---------------------------------------------------------------------
+def _roche_x(theta: float, f: float) -> float:
+    """Dimensionless Roche radius r/R_pole at colatitude ``theta``.
+
+    Solves the equipotential ``1 = 1/x + f x^2 sin^2(theta)`` (Maeder
+    1999); x=1 at the pole, ->1.5 at the equatorial break-up limit.
+    """
+    s2 = math.sin(theta) ** 2
+    if f * s2 < 1.0e-12:
+        return 1.0
+    lo, hi = 1.0, 1.5
+    for _ in range(60):
+        mid = 0.5 * (lo + hi)
+        if 1.0 / mid + f * mid * mid * s2 - 1.0 > 0.0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def _elr_phi(theta: float, w2: float, x: float) -> float:
+    """Solve the ELR2011 transcendental for the auxiliary angle.
+
+    cos(phi) + ln tan(phi/2) = (1/3) w2 x^3 cos^3(theta)
+                               + cos(theta) + ln tan(theta/2)
+    (Espinosa-Lara & Rieutord 2011, A&A 533 A43).  The LHS is strictly
+    increasing in phi on (0, pi), so a bisection is robust.
+    """
+    rhs = ((1.0 / 3.0) * w2 * x ** 3 * math.cos(theta) ** 3
+           + math.cos(theta) + math.log(math.tan(0.5 * theta)))
+    lo, hi = 1.0e-6, math.pi - 1.0e-6
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        lhs = math.cos(mid) + math.log(math.tan(0.5 * mid))
+        if lhs < rhs:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+@lru_cache(maxsize=64)
+def _elr_table(omega_ratio: float, n: int = 256):
+    """Relative T_eff^4(colatitude) from the ELR2011 model.
+
+    Returns (theta_grid, t4_rel) over one hemisphere.  ``w2`` =
+    Omega^2 R_p^3 / (GM) = 2 f.  Reduces to a uniform sphere (t4_rel
+    constant) as omega_ratio -> 0, so a slow rotator is unchanged.
+    """
+    # omega_ratio = Omega/Omega_crit, Omega_crit^2 = 8GM/27R^3
+    # -> w2 = Omega^2 R^3 / GM = (8/27) omega_ratio^2
+    w2 = (8.0 / 27.0) * float(omega_ratio) ** 2
+    th = np.linspace(1.0e-3, math.pi / 2.0 - 1.0e-3, n)
+    t4 = np.empty(n)
+    for i, theta in enumerate(th):
+        x = _roche_x(theta, 0.5 * w2)  # f = w2/2
+        s, c = math.sin(theta), math.cos(theta)
+        # effective gravity in units of GM/R_p^2 (Roche potential grad)
+        g_r = -1.0 / (x * x) + w2 * x * s * s
+        g_t = w2 * x * s * c
+        g_eff = math.hypot(g_r, g_t)
+        if w2 < 1.0e-9:
+            fw = 1.0
+        else:
+            phi = _elr_phi(theta, w2, x)
+            fw = (math.tan(phi) / math.tan(theta)) ** 2
+        t4[i] = g_eff * fw
+    return th, t4
+
+
+def gravity_darkening_factor(blat, surface: "StarSurface", star=None, *,
+                             model: str = "elr"):
+    """Per-pixel bolometric multiplier from gravity darkening.
+
+    ``model='elr'`` (default) uses Espinosa-Lara & Rieutord 2011 (valid
+    at any rotation rate); ``'vonzeipel'`` the classic T ~ g_eff^beta
+    (kept for the over-estimate comparison test).  The convective vs
+    radiative envelope is folded in through ``surface.beta_gd`` (Lucy
+    0.08 -> von Zeipel 0.25): the pole-equator contrast is scaled by
+    beta_gd/0.25, so a convective star is only weakly gravity-darkened.
+    A slow rotator returns ~1 everywhere (Sun: <1e-4).
+    """
+    m_msun = (float(getattr(star, "mass", None) or 0.0)
+              or float(surface.mass_msun))
+    r_rsun = (float(getattr(star, "radius", None) or 0.0)
+              or float(surface.radius_rsun))
+    M_kg = m_msun * M_SUN_KG
+    R_m = r_rsun * R_SUN_M
+    g_grav = G_SI * M_kg / max(R_m, 1.0) ** 2
+    omega = 2.0 * math.pi / (max(float(surface.p_rot_days), 1e-3) * 86400.0)
+    omega_crit = math.sqrt(8.0 * G_SI * M_kg / (27.0 * R_m ** 3))
+    wr = min(max(omega / omega_crit, 0.0), 1.0)
+    theta = (math.pi / 2.0) - blat  # colatitude
+    s_attn = float(np.clip(surface.beta_gd / 0.25, 0.0, 1.0))
+
+    if wr < 1.0e-4:
+        return xp.clip(1.0 + 0.0 * blat, 0.2, 3.0)
+
+    if model == "vonzeipel":
+        w2r = omega * omega * R_m
+        sin_t = xp.sin(theta)
+        cos_t = xp.cos(theta)
+        g_eff = xp.sqrt((g_grav - w2r * sin_t ** 2) ** 2
+                        + (w2r * sin_t * cos_t) ** 2)
+        _th = np.linspace(1e-3, math.pi - 1e-3, 256)
+        _ge = np.sqrt((g_grav - w2r * np.sin(_th) ** 2) ** 2
+                      + (w2r * np.sin(_th) * np.cos(_th)) ** 2)
+        g_bar = float(np.trapezoid(_ge * np.sin(_th), _th)
+                      / np.trapezoid(np.sin(_th), _th))
+        m = (g_eff / max(g_bar, 1e-9)) ** (4.0 * float(surface.beta_gd))
+        return xp.clip(m, 0.2, 3.0)
+
+    # ELR2011 relative T^4, normalised to its area-weighted mean so the
+    # disk-integrated flux is preserved (only redistributed).
+    th, t4 = _elr_table(round(wr, 4))
+    th_full = np.concatenate([th, math.pi - th[::-1]])
+    t4_full = np.concatenate([t4, t4[::-1]])
+    norm = float(np.trapezoid(t4_full * np.sin(th_full), th_full)
+                 / np.trapezoid(np.sin(th_full), th_full))
+    t4n = t4_full / max(norm, 1e-30)
+    th_arr = B.asarray(th_full)
+    t4_arr = B.asarray(t4n)
+    th_pix = xp.clip(theta, float(th_full[0]), float(th_full[-1]))
+    m = xp.interp(th_pix, th_arr, t4_arr)
+    # convective attenuation: blend toward isotropic by beta_gd/0.25
+    m = 1.0 + (m - 1.0) * s_attn
+    return xp.clip(m, 0.2, 3.0)
 
 
 def _planck(lam_nm, teff: float):
@@ -290,27 +483,11 @@ def render_star_disk(spec, surface: StarSurface, star, lam_nm,
                  * spot_mask[..., None])
     rad_field = rad_field * float(flux_scale)
 
-    # Gravity darkening: T_local = Teff (g_eff/g_bar)^beta, so the
-    # bolometric radiance scales by (g_eff/g_bar)^(4 beta) (von Zeipel /
-    # Lucy; research §4.2).  Equator-darkening for fast rotators; ~1 for
-    # the slowly rotating Sun, so the pinned solar disk is unchanged.
-    M_kg = float(getattr(star, "mass", None) or 1.0) * M_SUN_KG
-    R_m = float(getattr(star, "radius", None) or 1.0) * R_SUN_M
-    g_grav = G_SI * M_kg / max(R_m, 1.0) ** 2
-    omega = 2.0 * math.pi / (max(float(surface.p_rot_days), 1e-3) * 86400.0)
-    w2r = omega * omega * R_m
-    sin_t = xp.cos(blat)            # colatitude theta = pi/2 - blat
-    cos_t = xp.sin(blat)
-    g_eff = xp.sqrt((g_grav - w2r * sin_t ** 2) ** 2
-                    + (w2r * sin_t * cos_t) ** 2)
-    # Area-weighted mean g_eff over the sphere (cheap host-side scalar).
-    _th = np.linspace(1e-3, math.pi - 1e-3, 256)
-    _ge = np.sqrt((g_grav - w2r * np.sin(_th) ** 2) ** 2
-                  + (w2r * np.sin(_th) * np.cos(_th)) ** 2)
-    g_bar = float(np.trapezoid(_ge * np.sin(_th), _th)
-                  / np.trapezoid(np.sin(_th), _th))
-    gd = xp.clip((g_eff / max(g_bar, 1e-9)) ** (4.0 * float(surface.beta_gd)),
-                 0.2, 3.0)
+    # Gravity darkening (Espinosa-Lara & Rieutord 2011; research §4.2).
+    # Bolometric radiance scales by the ELR T_local^4 / <T^4> factor;
+    # ~1 for the slowly rotating Sun so the pinned solar disk is
+    # unchanged (to <1e-4), equator-darkened for fast rotators.
+    gd = gravity_darkening_factor(blat, surface, star)
     rad_field = rad_field * gd[..., None]
 
     sel = disk

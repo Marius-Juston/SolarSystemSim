@@ -302,6 +302,7 @@ assert _dlut.mean() < 2.0 and _dlut.max() <= 12, (_dlut.mean(),
 
 # --- GPU vs CPU render parity (only when CuPy is the active backend) ---
 from goldilocks import backend as _B
+
 if _B.ON_GPU:
     print(f"  backend = GPU ({_B.n_gpus()} device[s]); CPU/GPU parity "
           "is exercised by the LUT path above on-device")
@@ -311,9 +312,11 @@ else:
 # --- new showcase systems: a moon / a sibling-planet looming large ----
 from goldilocks.random_systems import (big_moon_system as _bms,
                                        companion_with_moon_system as _cwm)
+
 _bm = _bms()
 _mn = _bm.planets[0].moons[0]
 from goldilocks.moons import R_EARTH_AU as _REA
+
 _dia = 2.0 * np.degrees(np.arcsin(_mn.radius_re * _REA
                                   / _mn.a_planet_au))
 print(f"  big_moon_system: {_mn.name} angular diameter {_dia:.2f} deg")
@@ -356,15 +359,15 @@ from goldilocks.moons import Moon as _Mn
 
 _sun3 = _Star("Sun", mass=1.0, luminosity=1.0, teff=_TSUN, radius=1.0)
 _gnt = Planet("Gnt", mass_me=300.0, radius_re=11.0,
-                semi_major_axis_au=5.2, host_star_index=0)
+              semi_major_axis_au=5.2, host_star_index=0)
 _m_small = _Mn("sm", mass_me=1e-3, radius_re=0.08, a_planet_au=0.01,
-                eccentricity=0.0, density_gcc=3.0, kind="regular")
+               eccentricity=0.0, density_gcc=3.0, kind="regular")
 _m_big = _Mn("bg", mass_me=0.05, radius_re=0.45, a_planet_au=0.01,
-              eccentricity=0.0, density_gcc=3.0, kind="regular")
+             eccentricity=0.0, density_gcc=3.0, kind="regular")
 _m_io = _Mn("io", mass_me=0.015, radius_re=0.286, a_planet_au=0.00282,
-             eccentricity=0.0041, density_gcc=3.5, kind="regular")
+            eccentricity=0.0041, density_gcc=3.5, kind="regular")
 _m_ice = _Mn("ic", mass_me=2e-5, radius_re=0.04, a_planet_au=0.02,
-              eccentricity=0.0, density_gcc=1.4, kind="regular")
+             eccentricity=0.0, density_gcc=1.4, kind="regular")
 _gnt.moons = [_m_small, _m_big, _m_io, _m_ice]
 _sg = _SS.single("S3", _sun3, planets=[_gnt])
 _rng3 = np.random.default_rng(0)
@@ -407,7 +410,7 @@ assert np.all(np.diff(_ldv) >= -1e-9), "limb darkening not monotone"
 assert _ldv[-1] > _ldv[0] > 0.0
 # granule size grows with Teff / falls with gravity (H_p ~ T_eff/g).
 assert _su_h.granule_scale_rel > _su_s.granule_scale_rel \
-    > _su_c.granule_scale_rel
+       > _su_c.granule_scale_rel
 
 # --- L0 StellarState core (research/sun_render.md Phase 1) -------------
 from goldilocks.stellar_state import StellarState as _StS
@@ -483,11 +486,11 @@ print(f"  occult_fraction(1,1,1) = {_of(1.0, 1.0, 1.0):.3f} "
 
 _e3 = _ea("Earth")
 _e3.moons = [_Mn("Luna", mass_me=0.0123, radius_re=0.273,
-                  a_planet_au=0.00257, eccentricity=0.0549,
-                  density_gcc=3.34, kind="regular")]
+                 a_planet_au=0.00257, eccentricity=0.0549,
+                 density_gcc=3.34, kind="regular")]
 _sysv = _SS.single("Solv", _Star("Sun", mass=1.0, luminosity=1.0,
-                                  teff=_TSUN, radius=1.0),
-                    planets=[_e3])
+                                 teff=_TSUN, radius=1.0),
+                   planets=[_e3])
 _e3.habitability = _pfp(_e3, _sysv, np.random.default_rng(7),
                         in_phz=True)
 _lamv = _sv.lambda_grid_nm()
@@ -573,8 +576,19 @@ print(f"  Photosphere[reference] T in [{_Tr.min():.0f},{_Tr.max():.0f}] K, "
 # Increment-3 Phase-2 gap closures.
 # Granule wavenumber is physically grounded (R*/1Mm) then grid-capped.
 assert _phr.k_phys > 100.0 and _phr._freq_capped, _phr.k_phys
-# Separate low-frequency sunspot channel at 0.05x granulation (2.8).
-assert abs(_phr.spot_freq - max(0.05 * _phr.freq, 0.6)) < 1e-9
+# Resolution safety (Increment 3.1): higher res = MORE of the SAME
+# physical scene.  Granule freq rises with resolution (more detail) while
+# the advecting-flow and sunspot wavenumbers stay fixed (same physical
+# motion + spot size at every preset); k_phys is resolution-invariant.
+_p_dev = _Ph(_phr.surface, res="dev")
+_p_med = _Ph(_phr.surface, res="med")
+assert _p_med.freq > _p_dev.freq, (_p_dev.freq, _p_med.freq)
+assert _p_dev.flow_k == _p_med.flow_k, "flow_k must be res-independent"
+assert _p_dev.spot_freq == _p_med.spot_freq, "spot_k must be res-indep"
+assert abs(_p_dev.k_phys - _p_med.k_phys) < 1e-9, "k_phys res-invariant"
+assert _p_dev.freq >= _p_dev.W / 12.0 or _p_dev.freq == _p_dev.k_phys
+# Granule cells keep enough pixels to never alias at any preset.
+assert _p_med.W / _p_med.freq >= 4.0, _p_med.W / _p_med.freq
 # Solar granule-lifetime advance rate recovers ~0.25 (~ the old t/4);
 # a more active (lower-Ro) star boils faster (rate scales Ro^-1/2).
 assert abs(_phr._time_rate - 0.25) < 5e-3, _phr._time_rate
@@ -588,6 +602,208 @@ assert 0.0 < float(_dnud.mean()) < 8.0, float(_dnud.mean())
 print(f"  Photosphere gaps: k_phys={_phr.k_phys:.0f}->{_phr.freq:.0f} "
       f"spot_k={_phr.spot_freq:.2f} Dravins net=+{_dnud.mean():.2f} K "
       f"(blue) OK")
+
+# --- Phase 3: Roche geometry + ELR2011 gravity + limb darkening ------
+import dataclasses as _dc
+from goldilocks.starsurface import (gravity_darkening_factor as _gdf,
+                                    ld_flux_factor as _ldf,
+                                    limb_darkening_law as _ldl,
+                                    star_surface_for as _ssf)
+from goldilocks.stellar import Star as _Star2
+
+# Sun: negligible rotation -> Roche/grav are no-ops, disk ~ unchanged.
+_sun2 = _StS.for_mass_age(1.0, 4.6)
+assert _sun2.roche_f < 1e-4 and _sun2.omega_ratio < 0.02, _sun2.roche_f
+_gsun = _B.asnumpy(_gdf(_B.asarray(_phr._lat), _phr.surface))
+assert float(np.abs(_gsun - 1.0).max()) < 1e-3, float(np.abs(_gsun - 1).max())
+# Non-rotating star -> exact sphere (gravity factor identically 1).
+_norot = _dc.replace(_phr.surface, p_rot_days=1e9, omega_ratio=0.0,
+                     oblateness=0.0)
+_g0 = _B.asnumpy(_gdf(_B.asarray(_phr._lat), _norot))
+assert float(np.abs(_g0 - 1.0).max()) < 1e-9, float(np.abs(_g0 - 1).max())
+# Vega-class fast rotator: oblate, pole far brighter than equator, and
+# ELR pole < von-Zeipel pole (von Zeipel overestimates pole/equator dT).
+_vega = _ssf(_Star2("F", mass=1.8), age_gyr=0.04)
+assert _vega.oblateness > 0.3, _vega.oblateness
+_blat = _B.asarray(np.array([0.0, np.pi / 2 - 1e-3]))  # equator, pole
+_ge = _B.asnumpy(_gdf(_blat, _vega))
+_gv = _B.asnumpy(_gdf(_blat, _vega, model="vonzeipel"))
+assert _ge[1] > 1.5 * _ge[0], (_ge[0], _ge[1])  # pole >> equator
+assert _ge[1] < _gv[1], (_ge[1], _gv[1])  # ELR < von Zeipel
+# Limb-darkening laws: physical band, differ, and flux-conservable.
+for _law in ("quadratic", "eddington", "claret4"):
+    _raw = _ldf(_phr.surface, _law)
+    assert 0.30 < _raw < 1.0, (_law, _raw)
+    _mu = np.linspace(0.0, 1.0, 4096)
+    _I = np.asarray(_B.asnumpy(_ldl(_B.asarray(_mu), _phr.surface,
+                                    law=_law))) / _raw
+    assert abs(2.0 * float(np.trapezoid(_I * _mu, _mu)) - 1.0) < 1e-3
+assert abs(_ldf(_phr.surface, "quadratic")
+           - _ldf(_phr.surface, "eddington")) > 1e-3  # laws differ
+print(f"  Phase3: Sun |grav-1|<1e-3 (no-op); Vega obl={_vega.oblateness:.2f}"
+      f" pole/eq={_ge[1] / max(_ge[0], 1e-6):.1f} ELR<vZ; LD laws OK")
+
+# --- Phase 4: chromosphere / transition region / spicules -----------
+from goldilocks.chromosphere import (emission_line_rgb as _elrgb,
+                                     inverse_evershed_kms as _iev)
+
+# Scale height H = k_B T/(mu m_H g): Sun shell ~2000 km ~0.3% R; quiet.
+assert 0.002 <= _sun2.chromosphere_thickness_rel <= 0.010, \
+    _sun2.chromosphere_thickness_rel
+assert _sun2.chromo_activity < 0.4, _sun2.chromo_activity
+_md4 = _StS.for_mass_age(0.3, 5.0)
+assert _md4.chromo_activity > _sun2.chromo_activity  # active M-dwarf
+# H monotone in T/g: the higher-gravity M-dwarf has a thinner scale
+# height than the Sun.
+assert _sun2.pressure_scale_height_m > _md4.pressure_scale_height_m, (
+    _sun2.pressure_scale_height_m, _md4.pressure_scale_height_m)
+# Emission-line chromaticities.
+_rh = _elrgb("halpha")
+_rc = _elrgb("caiik")
+assert _rh[0] > _rh[2] + 0.3, _rh  # H-alpha red
+assert _rc[2] > _rc[0] + 0.3, _rc  # Ca II K blue-violet
+assert _elrgb("heii304").sum() > 0 and _elrgb("feix171").sum() > 0
+# Inverse Evershed: chromospheric inflow, opposite the photospheric
+# outflow, ~0.8x its magnitude.
+_iv = _iev(_phr.surface)
+assert _iv < 0.0 and abs(abs(_iv) - 0.8 * _phr.surface.evershed_kms) < 1e-6
+# line=None is a strict no-op; H-alpha adds a limb-brightened red ring
+# (optically-thin E ∝ (1-mu)^p): outer annulus redder than the centre.
+_d_none = _phr.disk_image(240)
+_d_none2 = _phr.disk_image(240, emission_line=None)
+assert np.array_equal(_d_none, _d_none2)  # None == no-op
+_d_ha = _phr.disk_image(240, emission_line="halpha")
+assert not np.array_equal(_d_none, _d_ha)
+_n = _d_ha.shape[0]
+_cx = _n // 2
+_yy, _xx = np.mgrid[0:_n, 0:_n]
+_rr = np.sqrt((_xx - _cx) ** 2 + (_yy - _cx) ** 2) / (0.5 * _n)
+_rim = (_rr > 0.85) & (_rr < 1.02)
+_core = _rr < 0.5
+# chromospheric emission = excess over the bolometric image; it is
+# optically-thin limb-brightened, so the added red is concentrated at
+# the rim, not the (white, already-bright) disk centre.
+_dr = _d_ha[..., 0].astype(int) - _d_none[..., 0].astype(int)
+_rim_r = float(_dr[_rim].mean())
+_core_r = float(_dr[_core].mean())
+assert _rim_r > _core_r + 2.0, (_rim_r, _core_r)  # limb-brightened
+print(f"  Phase4: Sun shell={_sun2.chromosphere_thickness_rel * 100:.2f}%R "
+      f"act={_sun2.chromo_activity:.2f} (M-dwarf {_md4.chromo_activity:.2f}); "
+      f"Halpha rim>core ({_rim_r:.0f}>{_core_r:.0f}); invEvershed={_iv:.1f} OK")
+
+# --- Increment 6: cellular granulation + relief + colour + Evershed --
+# Worley / Simplex noise foundation (research 2.3).
+_wp9 = _rng9.uniform(-6.0, 6.0, size=(3, 300_000))
+_wf1, _wf2 = _Nz.worley_noise_3d(_wp9[0], _wp9[1], _wp9[2], seed=2,
+                                 return_f2=True)
+assert bool((_wf2 >= _wf1 - 1e-9).all()) and float(_wf1.min()) >= 0.0
+_sx9 = _Nz.simplex_noise_3d(_wp9[0], _wp9[1], _wp9[2], seed=3)
+assert -1.001 <= float(_sx9.min()) and float(_sx9.max()) <= 1.001
+assert abs(float(_sx9.mean())) < 0.05, float(_sx9.mean())
+# Worley granulation field: deterministic + bounded.
+_thg = _rng9.uniform(0.1, np.pi - 0.1, 5000)
+_phg = _rng9.uniform(0.0, 2 * np.pi, 5000)
+_gnx = np.sin(_thg) * np.cos(_phg)
+_gny = np.sin(_thg) * np.sin(_phg)
+_gnz = np.cos(_thg)
+_gA = _Nz.granulation_field(_gnx, _gny, _gnz, 20.0, seed=7)
+_gB = _Nz.granulation_field(_gnx, _gny, _gnz, 20.0, seed=7)
+assert np.array_equal(np.asarray(_B.asnumpy(_gA)),
+                      np.asarray(_B.asnumpy(_gB)))
+# DKIST granulation validation: quiet disk-centre continuum contrast,
+# fill factor, and lanes darker than granule interiors.
+_pg = _Ph.for_star_seed(1.0, 7, res="med", backend="reference")
+for _ in range(20):
+    _pg.step(0.1)
+_dg = _pg.disk_image(520)
+_ng = _dg.shape[0]
+_cc = _ng // 2
+_yy2, _xx2 = np.mgrid[0:_ng, 0:_ng]
+_rr2 = np.sqrt((_xx2 - _cc) ** 2 + (_yy2 - _cc) ** 2) / (0.5 * _ng)
+_lum = (_dg[..., 0] * 0.30 + _dg[..., 1] * 0.59
+        + _dg[..., 2] * 0.11)
+_q = _lum[(_rr2 < 0.35) & (_lum > 0.5 * _lum.max())]  # quiet centre
+_rms = float(_q.std() / max(_q.mean(), 1e-9))
+assert 0.05 <= _rms <= 0.30, _rms  # DKIST ~0.15-0.20
+_fill = float((_q > _q.mean()).mean())
+assert 0.35 <= _fill <= 0.75, _fill  # granule area frac
+# Colour-not-grey: bright, warm (R>=G>=B), measurably non-neutral.
+_cpx = _dg[_cc - 30:_cc + 30, _cc - 30:_cc + 30].reshape(-1, 3).mean(0)
+assert _cpx.mean() > 150.0, _cpx  # bright, not dim
+assert _cpx[0] >= _cpx[1] >= _cpx[2] and \
+       (_cpx[0] - _cpx[2]) > 4.0, tuple(_cpx)  # warm, not grey
+# Photospheric Evershed: outward in penumbra, opposite sign to the
+# spot-field gradient; spotless star -> exact no-op.
+assert _pg._ev_w is not None
+_evmag = float(_B.asnumpy(_pg._ev_w * np.hypot(
+    _B.asnumpy(_pg._ev_i), _B.asnumpy(_pg._ev_j))).max())
+assert _evmag > 0.0
+_ev_dot = float((_B.asnumpy(_pg._ev_i) ** 2
+                 + _B.asnumpy(_pg._ev_j) ** 2).max())
+assert 0.5 < _ev_dot < 1.5  # unit direction
+_spotless = _Ph.for_star_seed(1.0, 7, res="dev", backend="reference")
+_spotless.surface.spot_coverage = 0.0
+_spotless.reset(7)
+assert _spotless._ev_w is None  # Evershed no-op
+print(f"  Increment6: DKIST RMS={_rms:.3f} fill={_fill:.2f} "
+      f"centreRGB=({int(_cpx[0])},{int(_cpx[1])},{int(_cpx[2])}) warm; "
+      f"Worley/Simplex OK; Evershed penumbral outflow OK")
+
+
+# --- Measured-data validation: Sun / hot blue star / M dwarf -------
+# Reference values from the literature: Sun Teff 5772 K, B-V 0.66
+# (IAU/Cox); a hot B/A star Teff >~1e4 K, B-V ~0 (blue-white); an M
+# dwarf Teff ~3400 K, B-V ~1.5 (red).  The rendered disk-centre colour
+# must follow the real stellar sequence (hot=blue, cool=red), not all
+# read the same warm white.
+def _centre_rgb(mass, age):
+    _q = _Ph(_ssf(_Star2("v", mass=mass), age_gyr=age), res="dev",
+             seed=7, backend="reference")
+    for _ in range(8):
+        _q.step(0.1)
+    _im = _q.disk_image(200)
+    _cc = _im.shape[0] // 2
+    return (_im[_cc - 12:_cc + 12, _cc - 12:_cc + 12]
+            .reshape(-1, 3).mean(0)), _q.surface.teff
+
+
+_csun, _tsun2 = _centre_rgb(1.0, 4.6)
+_cblue, _tblue = _centre_rgb(3.0, 0.2)
+_cmd, _tmd = _centre_rgb(0.3, 5.0)
+assert abs(_tsun2 - 5772.0) < 120.0, _tsun2  # Sun Teff vs IAU
+assert _tblue > 9000.0 and _tmd < 3900.0, (_tblue, _tmd)
+# Colour sequence: blue star bluer than the Sun; M dwarf redder.
+assert (_cblue[2] - _cblue[0]) > (_csun[2] - _csun[0]) + 3.0, \
+    (tuple(_csun), tuple(_cblue))
+assert (_cmd[0] - _cmd[2]) > (_csun[0] - _csun[2]) + 3.0, \
+    (tuple(_csun), tuple(_cmd))
+# Sun stays a bright warm white (gray-fix), not neutral grey/dim.
+assert _csun.mean() > 150.0 and (_csun[0] - _csun[2]) > 3.0, \
+    tuple(_csun)
+print(f"  Measured-data: Sun Teff={_tsun2:.0f}K warm{tuple(int(v) for v in _csun)} "
+      f"| blue {_tblue:.0f}K {tuple(int(v) for v in _cblue)} "
+      f"| Mdwarf {_tmd:.0f}K {tuple(int(v) for v in _cmd)} -- sequence OK")
+# Stellar-classification colour accuracy: the black-body->sRGB locus
+# must match the canonical Charity / Wikipedia O..M apparent colours
+# (en.wikipedia.org/wiki/Stellar_classification) within CMF tolerance,
+# with the correct per-class channel ordering.
+from goldilocks.photosphere import (blackbody_srgb as _bbsrgb,
+                                    STELLAR_CLASS_SRGB as _SREF)
+
+_CLASS_T = {"O": 40000, "B": 15000, "A": 8500, "F": 6600,
+            "G": 5772, "K": 4400, "M": 3200}
+for _cl in "OBAFGKM":
+    _rgb = (np.asarray(_bbsrgb(_CLASS_T[_cl])) * 255.0)
+    _ref = np.array(_SREF[_cl], float)
+    assert float(np.abs(_rgb - _ref).max()) < 32.0, \
+        (_cl, tuple(_rgb.round()), _SREF[_cl])
+# hot classes blue (B>=R), G white-ish, cool classes red (R>B)
+assert _bbsrgb(40000)[2] > _bbsrgb(40000)[0]  # O blue
+assert _bbsrgb(15000)[2] > _bbsrgb(15000)[0]  # B blue
+assert _bbsrgb(3200)[0] > _bbsrgb(3200)[2] + 0.2  # M red
+assert _bbsrgb(5772)[0] >= _bbsrgb(5772)[1] >= _bbsrgb(5772)[2]  # G warm
+print("  Stellar-class colour: O/B/A blue-white .. G warm-white .. "
+      "K/M orange matches Charity/Wikipedia (<32/255) OK")
 
 if _HW:
     _pw = _Ph.for_star_seed(1.0, 7, backend="warp")

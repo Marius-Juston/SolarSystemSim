@@ -83,26 +83,26 @@ def _build_jobs():
     sun = Star("Sun", mass=1.0, luminosity=1.0, teff=T_EFF_SUN_K,
                radius=1.0)
     jobs.append(dict(sys=StarSystem.single("Sun + Earth", sun,
-                                            planets=[earth_analog("Earth")]),
-                      base_name="01_sun", extent=1.8, n_frames=80,
-                      duration_yr=2.0, sub_steps=200))
+                                           planets=[earth_analog("Earth")]),
+                     base_name="01_sun", extent=1.8, n_frames=80,
+                     duration_yr=2.0, sub_steps=200))
 
     A = Star("Alpha Cen A", mass=1.10)
     B = Star("Alpha Cen B", mass=0.907)
     jobs.append(dict(sys=StarSystem.binary("Alpha Cen AB", A, B,
-                                            separation_au=23.4,
-                                            eccentricity=0.52),
-                      base_name="02_alphacen", extent=30.0,
-                      n_frames=120, n_periods=1.0, sub_steps=40))
+                                           separation_au=23.4,
+                                           eccentricity=0.52),
+                     base_name="02_alphacen", extent=30.0,
+                     n_frames=120, n_periods=1.0, sub_steps=40))
 
     k16a = Star("Kepler-16 A", mass=0.6897, luminosity=0.148, teff=4450.0)
     k16b = Star("Kepler-16 B", mass=0.2026, luminosity=0.0057, teff=3310.0)
     jobs.append(dict(sys=StarSystem.binary("Kepler-16", k16a, k16b,
-                                            separation_au=0.2243,
-                                            eccentricity=0.1594,
-                                            planets=[kepler16_b()]),
-                      base_name="03_kepler16", extent=1.4, n_frames=120,
-                      n_periods=8.0, sub_steps=40))
+                                           separation_au=0.2243,
+                                           eccentricity=0.1594,
+                                           planets=[kepler16_b()]),
+                     base_name="03_kepler16", extent=1.4, n_frames=120,
+                     n_periods=8.0, sub_steps=40))
 
     k47a = Star("Kepler-47 A", mass=1.04, luminosity=0.84, teff=5636.0)
     k47b = Star("Kepler-47 B", mass=0.342, luminosity=0.0177, teff=3357.0)

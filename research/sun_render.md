@@ -6,33 +6,66 @@ that targets multi-GPU compute, large CPU core counts, and equation-level accura
 > **Implementation notes (as-built, Increments 1–2).** Where the realised
 > code refines this plan:
 > - **L0 (Phase 1)** lives in `goldilocks/stellar_state.py` inside the existing
->   `goldilocks/` package (not a new `stellarsim/`). Mass→L/R/Teff reuse the
->   project's calibrated **Eker 2018** relations (`stellar.py`) instead of the
->   crude piecewise power laws of §3 — smoother and already sanity-pinned.
+    > `goldilocks/` package (not a new `stellarsim/`). Mass→L/R/Teff reuse the
+    > project's calibrated **Eker 2018** relations (`stellar.py`) instead of the
+    > crude piecewise power laws of §3 — smoother and already sanity-pinned.
 > - **L2 photosphere (Phase 2)** is `goldilocks/photosphere.py` with **two
->   interchangeable step backends** behind one interface
->   (`GOLDILOCKS_PHOTOSPHERE_BACKEND=auto|warp|reference`): an **NVIDIA Warp**
->   `@wp.kernel` using the built-in divergence-free `wp.curlnoise`, and a
->   dependency-free NumPy/CuPy seam. Key correction to the §2 assumption: Warp
->   JIT-compiles the *same* kernel to **CPU *or* CUDA**, so the GPU path is
->   fully verifiable on a CPU-only machine and is simultaneously the efficient
->   path on the 4×A6000 box. The reference seam uses the project's seeded
->   value-noise lattice, so the backends agree *statistically*, not
->   bit-for-bit (verified in `test_sanity.py` section-9).
+    > interchangeable step backends** behind one interface
+    > (`GOLDILOCKS_PHOTOSPHERE_BACKEND=auto|warp|reference`): an **NVIDIA Warp**
+    > `@wp.kernel` using the built-in divergence-free `wp.curlnoise`, and a
+    > dependency-free NumPy/CuPy seam. Key correction to the §2 assumption: Warp
+    > JIT-compiles the *same* kernel to **CPU *or* CUDA**, so the GPU path is
+    > fully verifiable on a CPU-only machine and is simultaneously the efficient
+    > path on the 4×A6000 box. The reference seam uses the project's seeded
+    > value-noise lattice, so the backends agree *statistically*, not
+    > bit-for-bit (verified in `test_sanity.py` section-9).
 > - **Single-GPU now.** The Warp kernel is `device`-parametrised and the
->   texture is authored in latitude bands so the §5.2 **4-GPU strip+halo**
->   partition drops in next with no API change.
+    > texture is authored in latitude bands so the §5.2 **4-GPU strip+halo**
+    > partition drops in next with no API change.
 > - §2.12's live moderngl viewer is deferred; the standalone driver
->   (`render_photosphere.py`) emits offline equirect+disk PNGs and an MP4 via
->   `parallel.encode_frames` (the established driver pattern).
+    > (`render_photosphere.py`) emits offline equirect+disk PNGs and an MP4 via
+    > `parallel.encode_frames` (the established driver pattern).
 > - **Increment 3** closed the genuine Phase 1–2 gaps before scaling:
->   `T_to_spectral_class`/`spectral_class`, `StellarState.__post_init__`
->   validation, an explicit pre-100-Myr saturated-rotation plateau, and —
->   correcting a defect where §2.11 was ticked but absent — a real Dravins
->   convective blueshift in the colour path, a dedicated `0.05×` low-freq
->   sunspot channel, and a physically-grounded (`R*/1 Mm`) grid-clamped
->   granule wavenumber with an `Ro^-1/2` granule-lifetime rate. Solar
->   behaviour and every pinned sanity value are preserved.
+    > `T_to_spectral_class`/`spectral_class`, `StellarState.__post_init__`
+    > validation, an explicit pre-100-Myr saturated-rotation plateau, and —
+    > correcting a defect where §2.11 was ticked but absent — a real Dravins
+    > convective blueshift in the colour path, a dedicated `0.05×` low-freq
+    > sunspot channel, and a physically-grounded (`R*/1 Mm`) grid-clamped
+    > granule wavenumber with an `Ro^-1/2` granule-lifetime rate. Solar
+    > behaviour and every pinned sanity value are preserved.
+> - **Increment 4 (Phase 3)** adds Roche oblateness + gravity darkening +
+    > limb-darkening laws. Gravity darkening uses **Espinosa-Lara &
+    > Rieutord 2011 unconditionally** (not von Zeipel; `T∝(g_eff·F_w)^¼`
+    > with a `β_gd/0.25` convective attenuation), realised offline (the
+    > disk *silhouette* is Roche-deformed and per-pixel μ comes from the
+    > Roche surface normal — no GL mesh). All Phase-3 physics enters only
+    > via colour/disk helpers, so `temperature()`/parity/determinism and
+    > the Sun (ω̃≈8e-3 → grav≈1) are unchanged. Multi-GPU §5.2 still
+    > deferred.
+> - **Increment 5 (Phase 4)** adds the chromosphere/transition-region as
+    > an **offline procedural layer** (`goldilocks/chromosphere.py`): a
+    > shell whose thickness is the pressure scale height `H=k_B T/(μ m_H
+>   g)` (~7H ≈ Sun 2000 km ≈0.3%R), optically-thin limb brightening
+    > `E∝(1−μ)^p` (p≈3), a spicule fringe gated by the Mamajek-&-
+    > Hillenbrand Rossby activity proxy (log-normal heights), inverse-
+    > Evershed inflow opposite the photospheric outflow, and
+    > emission-line colours (Hα/Ca II K via CIE, He II 304/Fe IX 171 as
+    > EUV false colour). It is selected by `disk_image(emission_line=)`;
+    > `None` is a strict no-op so the bolometric Sun and all pinned values
+    > are byte-identical. Multi-GPU §5.2 still the only deferred item.
+> - **Increment 6** makes the granulation physically real and robust:
+    > the granule field is now **Worley/cellular** (`granulation_field`,
+    > bright convection cells + dark intergranular lanes) instead of smooth
+    > value noise; added `simplex_noise_3d`, `fbm3`, `domain_warp3`; a
+    > self-emissive **relief** (bump) shading so the photosphere is a
+    > corrugated surface, not a flat plane; a warm-balanced disk colour
+    > LUT (the shared ACES path desaturated the ~5772 K white to grey);
+    > the **photospheric Evershed** outflow (2.10); DKIST-faithful
+    > **umbral dots** and **filamentary penumbra**; and a quantitative
+    > **DKIST validation** (continuum RMS contrast / fill factor /
+    > lane<interior) in section-9. Determinism and the Warp/reference
+    > invariants hold; pinned non-photosphere values untouched. Multi-GPU
+    > §5.2 remains the only deferred checklist item.
 
 ---
 

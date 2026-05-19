@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from functools import lru_cache
 from typing import Optional
 
@@ -50,7 +50,6 @@ from goldilocks.stellar import (
     G_SI,
     M_SUN_KG,
     R_SUN_M,
-    T_EFF_SUN_K,
     luminosity_from_mass,
     radius_from_mass,
     teff_from_l_and_r,
@@ -58,8 +57,8 @@ from goldilocks.stellar import (
 
 # Solar reference anchors -------------------------------------------------
 AGE_SUN_GYR = 4.6
-VSINI_SUN_KMS = 2.0          # surface rotation speed anchor (Skumanich)
-P_ROT_SUN_DAYS = 25.0        # sidereal-ish equatorial value (cross-check)
+VSINI_SUN_KMS = 2.0  # surface rotation speed anchor (Skumanich)
+P_ROT_SUN_DAYS = 25.0  # sidereal-ish equatorial value (cross-check)
 DAY_S = 86400.0
 GYR_S = 1.0e9 * 3.15576e7
 
@@ -83,8 +82,8 @@ def _bv_lut():
     bisection.
     """
     bv = np.linspace(-0.40, 2.00, 1024)
-    t = teff_from_bv(bv)                 # strictly decreasing
-    order = np.argsort(t)               # ascending T for np.interp
+    t = teff_from_bv(bv)  # strictly decreasing
+    order = np.argsort(t)  # ascending T for np.interp
     return t[order], bv[order]
 
 
@@ -100,7 +99,7 @@ def bv_from_teff(teff: float) -> float:
 # Standard main-sequence Teff class boundaries [K] (e.g. Habets &
 # Heintze 1981 / Pecaut & Mamajek 2013 rounded edges).
 _SPECTRAL_EDGES = ((30000.0, "O"), (10000.0, "B"), (7500.0, "A"),
-                    (6000.0, "F"), (5200.0, "G"), (3700.0, "K"))
+                   (6000.0, "F"), (5200.0, "G"), (3700.0, "K"))
 
 
 def spectral_class_from_teff(teff: float) -> str:
@@ -135,7 +134,7 @@ def skumanich_prot_days(mass_msun: float, age_gyr: float,
     # v(t) = v_sun * (M)^0.5 * (t/t_sun)^-0.5   [km/s]
     v_kms = (VSINI_SUN_KMS * math.sqrt(max(mass_msun, 1.0e-3))
              * (age_gyr / AGE_SUN_GYR) ** -0.5)
-    v = v_kms * 1.0e3                                   # m/s
+    v = v_kms * 1.0e3  # m/s
     M = mass_msun * M_SUN_KG
     R = radius_rsun * R_SUN_M
     v_break = math.sqrt(G_SI * M / R)
@@ -158,7 +157,7 @@ def gravity_darkening_beta(mass_msun: float) -> float:
     """beta(M): 0.08 (convective) -> 0.25 (radiative), smoothstep blend."""
     lo, hi = 1.3, 1.7
     s = min(max((mass_msun - lo) / (hi - lo), 0.0), 1.0)
-    s = s * s * (3.0 - 2.0 * s)             # smoothstep
+    s = s * s * (3.0 - 2.0 * s)  # smoothstep
     return 0.08 + (0.25 - 0.08) * s
 
 
@@ -218,6 +217,11 @@ class StellarState:
     phi_sub_rad: float = 0.0
     active_longitude_amp: float = 0.0
     breakup_capped: bool = False
+    # --- rotational geometry (research/sun_render.md Phase 3) ---------
+    # omega = 2 pi / P_rot; Roche bulge f = omega^2 R^3 / (2 G M)
+    # (Maeder 1999).  Sun: omega~2.9e-6 rad/s, f~2e-5 (negligible).
+    omega_rad_s: float = 0.0
+    roche_f: float = 0.0
 
     def __post_init__(self) -> None:
         """Range + finiteness validation (checklist 1.2).
@@ -234,7 +238,7 @@ class StellarState:
             raise ValueError(f"age {self.age_gyr} Gyr must be > 0.")
         for name in ("luminosity_lsun", "radius_rsun", "teff_k", "bv",
                      "p_rot_days", "tau_c_days", "rossby", "beta_gd",
-                     "t_ms_gyr"):
+                     "t_ms_gyr", "omega_rad_s", "roche_f"):
             v = getattr(self, name)
             if not math.isfinite(v):
                 raise ValueError(f"derived field {name}={v} is not finite.")
@@ -254,7 +258,7 @@ class StellarState:
         L = luminosity_from_mass(mass_msun)
         R = radius_from_mass(mass_msun)
         Teff = teff_from_l_and_r(L, R)
-        t_ms_gyr = 10.0 * mass_msun ** -2.5          # 1e10 yr -> Gyr
+        t_ms_gyr = 10.0 * mass_msun ** -2.5  # 1e10 yr -> Gyr
 
         if age_gyr > t_ms_gyr:
             warnings.warn(
@@ -280,13 +284,20 @@ class StellarState:
             if age_gyr > t_sync:
                 locked = True
                 p_rot = float(orbital_period_days)
-                amp = 0.5                 # active-longitude contrast
+                amp = 0.5  # active-longitude contrast
                 # Sub-stellar point fixed in the corotating frame; use a
                 # reference longitude (orbital phase is set downstream).
                 phi_sub = 0.0
             rossby = p_rot / max(tau_c, 1.0e-6)
         else:
             rossby = p_rot / max(tau_c, 1.0e-6)
+
+        # Rotational geometry (research §3 / Phase 3).  Use the post-lock
+        # P_rot so tidally-locked binaries get the correct omega.
+        R_m = R * R_SUN_M
+        M_kg = mass_msun * M_SUN_KG
+        omega = (2.0 * math.pi / (max(p_rot, 1.0e-9) * DAY_S))
+        roche_f = omega * omega * R_m ** 3 / (2.0 * G_SI * M_kg)
 
         return cls(
             mass_msun=float(mass_msun), age_gyr=float(age_gyr),
@@ -296,7 +307,8 @@ class StellarState:
             rossby=float(rossby), beta_gd=float(beta),
             t_ms_gyr=float(t_ms_gyr), is_binary=is_binary,
             tidally_locked=locked, phi_sub_rad=float(phi_sub),
-            active_longitude_amp=float(amp), breakup_capped=capped)
+            active_longitude_amp=float(amp), breakup_capped=capped,
+            omega_rad_s=float(omega), roche_f=float(roche_f))
 
     @classmethod
     def from_star(cls, star, age_gyr: float = AGE_SUN_GYR,
@@ -312,6 +324,74 @@ class StellarState:
             lum = getattr(star, "luminosity", None) or 1.0
             m = float(min(max(lum ** (1.0 / 4.0), 0.08), 100.0))
         return cls.for_mass_age(float(m), age_gyr, **kw)
+
+    # --- rotational geometry (research/sun_render.md Phase 3) ---------
+    @property
+    def omega_crit_rad_s(self) -> float:
+        """Roche critical (break-up) angular velocity sqrt(8GM/27R^3)."""
+        R_m = self.radius_rsun * R_SUN_M
+        M_kg = self.mass_msun * M_SUN_KG
+        return math.sqrt(8.0 * G_SI * M_kg / (27.0 * R_m ** 3))
+
+    @property
+    def omega_ratio(self) -> float:
+        """omega-tilde = Omega / Omega_crit in [0, 1]."""
+        oc = self.omega_crit_rad_s
+        return float(min(max(self.omega_rad_s / oc, 0.0), 1.0)) if oc > 0 \
+            else 0.0
+
+    @property
+    def oblateness(self) -> float:
+        """r_eq/r_pole - 1 from the Roche surface (Maeder 1999).
+
+        Solves the dimensionless equipotential cubic ``f x^3 - x + 1 =
+        0`` (x = r_eq/r_pole) for the physical root in [1, 1.5]; 1.5 is
+        the break-up limit.  Sun: f~2e-5 -> oblateness ~2e-5.
+        """
+        f = self.roche_f
+        if f <= 1.0e-12:
+            return 0.0
+        lo, hi = 1.0, 1.5
+        for _ in range(60):  # bisection, monotone
+            mid = 0.5 * (lo + hi)
+            if f * mid ** 3 - mid + 1.0 > 0.0:
+                lo = mid
+            else:
+                hi = mid
+        return float(min(0.5 * (lo + hi) - 1.0, 0.5))
+
+    # --- chromosphere (research/sun_render.md Phase 4) ----------------
+    @property
+    def pressure_scale_height_m(self) -> float:
+        """Atmospheric pressure scale height H = k_B T / (mu m_H g)."""
+        K_B = 1.380649e-23
+        M_H = 1.67262192e-27
+        mu = 0.6  # ionised H/He mix
+        M_kg = self.mass_msun * M_SUN_KG
+        R_m = self.radius_rsun * R_SUN_M
+        g = G_SI * M_kg / R_m ** 2
+        return K_B * self.teff_k / (mu * M_H * g)
+
+    @property
+    def chromosphere_thickness_rel(self) -> float:
+        """Chromosphere thickness / R*.
+
+        ~7 pressure scale heights (the Sun: H~290 km -> ~2000 km ~
+        0.3% R_sun, the observed value); cooler / low-gravity stars get
+        a thicker shell via H.  Clamped to a sane render band.
+        """
+        R_m = self.radius_rsun * R_SUN_M
+        rel = 7.0 * self.pressure_scale_height_m / R_m
+        return float(min(max(rel, 0.002), 0.05))
+
+    @property
+    def chromo_activity(self) -> float:
+        """Chromospheric activity proxy in [0, 1] from the Rossby number.
+
+        Monotone, saturating for fast rotators at Ro<~0.45 (Mamajek &
+        Hillenbrand 2008 R'HK-Ro; saturation Ro~0.1-0.4).  Sun
+        (Ro~2.2) -> ~0.2 (quiet, faint spicule fringe)."""
+        return float(min(max(0.45 / max(self.rossby, 1e-3), 0.0), 1.0))
 
     # --- helpers --------------------------------------------------------
     def activity_regime(self) -> str:

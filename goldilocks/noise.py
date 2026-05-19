@@ -172,7 +172,7 @@ def value_noise_4d(x, y, z, t, seed: int = 1):
 
     def _h(ix, iy, iz, it):
         return val[(perm[(perm[(perm[(perm[ix] + iy) & 255]
-                                    + iz) & 255] + it) & 255]) & 255]
+                                + iz) & 255] + it) & 255]) & 255]
 
     x1, y1, z1, t1 = ((xi + 1) & 255, (yi + 1) & 255,
                       (zi + 1) & 255, (ti + 1) & 255)
@@ -188,6 +188,179 @@ def value_noise_4d(x, y, z, t, seed: int = 1):
         return _lerp(_lerp(c00, c10, v), _lerp(c01, c11, v), w)
 
     return _lerp(_cube(ti), _cube(t1), s)
+
+
+# ---------------------------------------------------------------------
+# Worley / cellular noise (Worley 1996, "A Cellular Texture Basis
+# Function").  Physically the right basis for convective granulation:
+# jittered feature points = granule centres, F2-F1 = the intergranular
+# downflow lane network.  Deterministic (same seeded `_tables` hash).
+# ---------------------------------------------------------------------
+def _cell_jitter(cx, cy, cz, perm, val, salt: int):
+    """Deterministic feature-point offset component in [0, 1) for an
+    integer lattice cell, independent per axis via `salt`."""
+    h = perm[(perm[(perm[(cx + salt * 131) & 255] + cy) & 255]
+              + cz) & 255] & 255
+    return 0.5 * (val[h] + 1.0)
+
+
+def worley_noise_3d(x, y, z, seed: int = 1, return_f2: bool = False):
+    """Cellular noise: distance to the nearest (F1) and 2nd-nearest (F2)
+    jittered feature point.  ``F2 - F1`` is ~0 on cell boundaries and
+    large in cell interiors -- the granule / lane signal."""
+    perm, val = _tables(int(seed))
+    x = xp.asarray(x, dtype=xp.float64)
+    y = xp.asarray(y, dtype=xp.float64)
+    z = xp.asarray(z, dtype=xp.float64)
+    cx = xp.floor(x).astype(xp.int64)
+    cy = xp.floor(y).astype(xp.int64)
+    cz = xp.floor(z).astype(xp.int64)
+    fx, fy, fz = x - cx, y - cy, z - cz
+    big = xp.full(xp.broadcast_arrays(fx, fy, fz)[0].shape, 1.0e30)
+    f1 = big
+    f2 = big + 1.0
+    for ox in (-1, 0, 1):
+        for oy in (-1, 0, 1):
+            for oz in (-1, 0, 1):
+                gx = (cx + ox) & 255
+                gy = (cy + oy) & 255
+                gz = (cz + oz) & 255
+                jx = _cell_jitter(gx, gy, gz, perm, val, 0)
+                jy = _cell_jitter(gx, gy, gz, perm, val, 1)
+                jz = _cell_jitter(gx, gy, gz, perm, val, 2)
+                dx = ox + jx - fx
+                dy = oy + jy - fy
+                dz = oz + jz - fz
+                d = xp.sqrt(dx * dx + dy * dy + dz * dz)
+                closer = d < f1
+                f2 = xp.where(closer, f1, xp.minimum(f2, d))
+                f1 = xp.where(closer, d, f1)
+    if return_f2:
+        return f1, f2
+    return f1
+
+
+# ---------------------------------------------------------------------
+# 3-D simplex (gradient) noise -- Perlin/Gustavson skewed-simplex; no
+# lattice-axis bias, smoother than value noise.  Deterministic via the
+# seeded permutation table.
+# ---------------------------------------------------------------------
+_SIMPLEX_GRAD3 = np.array(
+    [[1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+     [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+     [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]], dtype=np.float64)
+
+
+def simplex_noise_3d(x, y, z, seed: int = 1):
+    """3-D simplex gradient noise in ~[-1, 1] (deterministic)."""
+    perm, _ = _tables(int(seed))
+    g3 = B.asarray(_SIMPLEX_GRAD3)
+    x = xp.asarray(x, dtype=xp.float64)
+    y = xp.asarray(y, dtype=xp.float64)
+    z = xp.asarray(z, dtype=xp.float64)
+    F3 = 1.0 / 3.0
+    G3 = 1.0 / 6.0
+    s = (x + y + z) * F3
+    i = xp.floor(x + s)
+    j = xp.floor(y + s)
+    k = xp.floor(z + s)
+    t = (i + j + k) * G3
+    x0 = x - (i - t)
+    y0 = y - (j - t)
+    z0 = z - (k - t)
+    # Canonical Gustavson tetra ordering (six cases A..F).
+    g = x0 >= y0
+    h = y0 >= z0
+    p = x0 >= z0
+    A = g & h
+    Bm = g & (~h) & p
+    C = g & (~h) & (~p)
+    D = (~g) & (~h)
+    E = (~g) & h & (~p)
+    Fm = (~g) & h & p
+    one = xp.ones_like(x0)
+    zero = xp.zeros_like(x0)
+    i1 = xp.where(A | Bm, one, zero)
+    j1 = xp.where(E | Fm, one, zero)
+    k1 = xp.where(C | D, one, zero)
+    i2 = xp.where(A | Bm | C | Fm, one, zero)
+    j2 = xp.where(A | D | E | Fm, one, zero)
+    k2 = xp.where(Bm | C | D | E, one, zero)
+
+    def _grad(ix, iy, iz, dx, dy, dz):
+        idx = (perm[(perm[(perm[ix.astype(xp.int64) & 255]
+                           + iy.astype(xp.int64)) & 255]
+                     + iz.astype(xp.int64)) & 255] % 12)
+        gv = g3[idx]
+        return gv[..., 0] * dx + gv[..., 1] * dy + gv[..., 2] * dz
+
+    def _corner(dx, dy, dz, ix, iy, iz):
+        tt = 0.6 - dx * dx - dy * dy - dz * dz
+        tt = xp.where(tt < 0.0, 0.0, tt)
+        return tt ** 4 * _grad(ix, iy, iz, dx, dy, dz)
+
+    x1 = x0 - i1 + G3
+    y1 = y0 - j1 + G3
+    z1 = z0 - k1 + G3
+    x2 = x0 - i2 + 2.0 * G3
+    y2 = y0 - j2 + 2.0 * G3
+    z2 = z0 - k2 + 2.0 * G3
+    x3 = x0 - 1.0 + 3.0 * G3
+    y3 = y0 - 1.0 + 3.0 * G3
+    z3 = z0 - 1.0 + 3.0 * G3
+    n = (_corner(x0, y0, z0, i, j, k)
+         + _corner(x1, y1, z1, i + i1, j + j1, k + k1)
+         + _corner(x2, y2, z2, i + i2, j + j2, k + k2)
+         + _corner(x3, y3, z3, i + 1.0, j + 1.0, k + 1.0))
+    return xp.clip(32.0 * n, -1.0, 1.0)
+
+
+def domain_warp3(x, y, z, seed: int = 1, amp: float = 0.5):
+    """Organic domain warp p -> p + amp*noise(p) (research 2.3)."""
+    wx = simplex_noise_3d(x + 11.3, y, z, seed + 1)
+    wy = simplex_noise_3d(x, y + 7.7, z, seed + 2)
+    wz = simplex_noise_3d(x, y, z + 3.1, seed + 3)
+    return x + amp * wx, y + amp * wy, z + amp * wz
+
+
+def fbm3(x, y, z, seed: int = 1, octaves: int = 4,
+         lacunarity: float = 2.0, gain: float = 0.5,
+         kind: str = "value"):
+    """3-D fractal Brownian motion (persistence `gain`, `lacunarity`).
+
+    ``kind`` selects the basis: 'value' (lattice) or 'simplex'.
+    Normalised to ~[-1, 1]; the octave fall-off gives a 1/f spectrum.
+    """
+    base = simplex_noise_3d if kind == "simplex" else value_noise_3d
+    total = xp.zeros_like(xp.asarray(x, dtype=xp.float64)
+                          + xp.asarray(y, dtype=xp.float64)
+                          + xp.asarray(z, dtype=xp.float64))
+    amp, freq, norm = 1.0, 1.0, 0.0
+    for o in range(int(octaves)):
+        total = total + amp * base(x * freq, y * freq, z * freq,
+                                   seed + o)
+        norm += amp
+        amp *= gain
+        freq *= lacunarity
+    return total / max(norm, 1e-9)
+
+
+def granulation_field(nx, ny, nz, freq: float = 1.0, seed: int = 1):
+    """Cellular convective-granulation scalar in ~[-1, 1].
+
+    Worley ``F2 - F1`` (bright polygonal granule interiors, thin dark
+    intergranular downflow lanes) + a faint finer octave, made
+    zero-mean / unit-RMS so the downstream ``Teff +/- dT`` mapping and
+    amplitude are preserved (resolution-safe: `freq` is the physical
+    granule wavenumber)."""
+    f1, f2 = worley_noise_3d(nx * freq, ny * freq, nz * freq,
+                             seed=seed + 11, return_f2=True)
+    g = f2 - f1  # ~0 at lanes
+    g = g + 0.18 * value_noise_3d(nx * freq * 2.3, ny * freq * 2.3,
+                                  nz * freq * 2.3, seed=seed + 12)
+    g = g - g.mean()
+    g = g / (float(g.std()) + 1e-9)
+    return xp.clip(g, -1.5, 1.5)
 
 
 def curl_noise_sphere(nx, ny, nz, t=0.0, seed: int = 1,

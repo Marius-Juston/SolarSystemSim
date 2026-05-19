@@ -41,6 +41,7 @@ def main() -> None:
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 7
     mass = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
     res = sys.argv[3] if len(sys.argv) > 3 else "dev"
+    line = sys.argv[4] if len(sys.argv) > 4 else None  # halpha|caiik|...
 
     p = Photosphere.for_star_seed(mass, seed, res=res)
     print(p.surface.summary)
@@ -51,7 +52,7 @@ def main() -> None:
         p.step(0.1)
 
     eq = p.to_srgb()
-    disk = p.disk_image(640)
+    disk = p.disk_image(640, emission_line=line)
 
     eq_png = os.path.join(OUT_FIG, f"photosphere_{seed}_equirect.png")
     dk_png = os.path.join(OUT_FIG, f"photosphere_{seed}_disk.png")
@@ -65,7 +66,8 @@ def main() -> None:
         n = 90
         for f in range(n):
             p.step(0.1)
-            yield p.disk_image(512, sub_lon=2.0 * 3.14159265 * f / n)
+            yield p.disk_image(512, sub_lon=2.0 * 3.14159265 * f / n,
+                               emission_line=line)
 
     mp4 = os.path.join(OUT_ANI, f"photosphere_{seed}.mp4")
     try:

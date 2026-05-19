@@ -17,7 +17,11 @@ matplotlib).
   `uv run python generate_solar_system.py [seed]`
 - Photorealistic ground-to-sky renderer (single / binary / triple sky): `uv run python render_skyview.py [seed]`
 - Stateful photosphere field (granulation + sunspots, equirect + disk PNG + MP4):
-  `uv run python render_photosphere.py [seed] [mass_msun] [res]` — research/sun_render.md Phase 2.
+  `uv run python render_photosphere.py [seed] [mass_msun] [res] [line]` — research/sun_render.md Phase 2.
+- Photosphere diagnostics / measured-data validation (Sun, hot blue star, M dwarf; zoom
+  crops, RMS-contrast / fill-factor / power-spectrum / limb-darkening plots, measured-vs-
+  rendered PASS/FAIL table): `uv run python diagnostics_photosphere.py [dev|med]` →
+  `figures/photosphere/diagnostics/`.
 - All drivers write **repo-relative** to `figures/` and `animations/` (the old hardcoded `/home/claude/...` path is
   gone). **MP4 rendering requires `ffmpeg` on PATH**; drivers set `matplotlib.use("Agg")` and gracefully skip MP4s if
   ffmpeg is absent.
@@ -39,11 +43,38 @@ multi-GPU, single-GPU and CPU-only machines:
   **Warp `@wp.kernel`** (`wp.curlnoise`) that JIT-compiles to CPU *or* CUDA — the efficient path
   on the multi-GPU box, still verifiable CPU-only — and a dependency-free NumPy/CuPy seam
   (fallback + correctness oracle). The two backends agree statistically, not bit-for-bit
-  (asserted in section 9). Granule wavenumber is the physical `R*/1 Mm` value grid-clamped
-  (cap logged in `memory_report`), granule-lifetime rate scales `Ro^-1/2`, sunspots use a
-  dedicated `0.05×` low-freq channel, and a Dravins convective blueshift tints the colour
-  path only (`temperature()` stays raw, so determinism/parity are unaffected). Driven by
-  `render_photosphere.py`; not wired into the stateless pool disk renderer.
+  (asserted in section 9). **Resolution-safe:** granule wavenumber tracks the physical
+  `R*/1 Mm` value clamped only to keep `>=` a min px/cell (higher res = more detail of the
+  same scene, never aliased), while the advecting-flow and sunspot wavenumbers are fixed
+  physical low frequencies (same motion/spot size at every preset). Granule-lifetime rate
+  scales `Ro^-1/2`. The granule field is **Worley/cellular**
+  (`noise.granulation_field`: bright convection cells + dark intergranular lanes;
+  `noise.py` also has `simplex_noise_3d`, `fbm3`, `domain_warp3`, `worley_noise_3d`).
+  `disk_image` bilinear-samples and applies a self-emissive **relief** (bump) shade so the
+  surface is corrugated, not flat; a warm-balanced black-body LUT (the shared `skyview`
+  ACES path desaturates the ~5772 K white to grey) gives a bright warm-white disk; spots
+  carry DKIST-faithful **umbral dots** + **filamentary penumbra**, with a photospheric
+  **Evershed** outflow in the penumbra (reference oracle). A Dravins convective blueshift
+  tints the colour path only (`temperature()` stays raw, so determinism/parity are
+  unaffected); a quantitative **DKIST validation** (RMS contrast / fill factor) is in
+  `test_sanity.py` section-9.
+  Driven by `render_photosphere.py`; not wired into the stateless pool disk renderer.
+- Gravity darkening + stellar geometry (Phase 3): `StellarState` exposes `omega_rad_s`,
+  `roche_f`, `omega_ratio`, `oblateness` (Roche, Maeder 1999). `starsurface.py` has
+  `gravity_darkening_factor` (**Espinosa-Lara & Rieutord 2011** unconditionally, with a
+  `β_gd/0.25` convective attenuation; von Zeipel only for the comparison test),
+  `limb_darkening_law` (quadratic/eddington/claret4) and `ld_flux_factor`. `disk_image`
+  Roche-deforms the silhouette and takes per-pixel μ from the surface normal when
+  `oblateness>1e-3`; all of it is colour/geometry-only so the slow-rotating Sun and every
+  pinned value are unchanged.
+- Chromosphere / transition region (Phase 4): `goldilocks/chromosphere.py`
+  (`emission_line_rgb`, `inverse_evershed_kms`, `chromosphere_overlay`) +
+  `StellarState.{pressure_scale_height_m, chromosphere_thickness_rel, chromo_activity}`.
+  An offline physics layer: shell thickness from the pressure scale height, optically-thin
+  limb brightening `E∝(1−μ)^p`, Rossby-gated spicule fringe (log-normal heights), inverse
+  Evershed inflow, emission-line colour via the CIE pipeline. Selected by
+  `disk_image(emission_line=...)` / `render_photosphere.py [seed] [mass] [res] [line]`;
+  `None` is a strict no-op (bolometric Sun byte-identical).
 - `goldilocks/parallel.py` — work distribution + `encode_frames` (frames streamed straight into one
   `ffmpeg`, no `FuncAnimation`). One worker process per GPU (pinned via `CUDA_VISIBLE_DEVICES`), or
   a CPU process pool. `GOLDILOCKS_SERIAL=1` forces an in-process serial map (debug);
